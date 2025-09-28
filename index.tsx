@@ -442,7 +442,8 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
         setGeneratedContent('');
         try {
             const finalPrompt = promptTemplate.replace('{TOPIC}', topic);
-            const res = await fetch('/api/generate', {
+            const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+            const res = await fetch(`${API_BASE}/api/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: finalPrompt })

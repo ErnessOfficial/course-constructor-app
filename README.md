@@ -31,7 +31,18 @@ Tu clave queda solo en el backend local y no en el bundle del navegador. El arch
 
 ## Producción
 
-Para producción, crea un endpoint equivalente a `/api/generate` en tu backend o función serverless y define la variable de entorno `GEMINI_API_KEY` en el servidor. El cliente seguirá llamando a `/api/generate`.
+Para producción, tienes dos opciones:
+
+1) Vercel (recomendado, fullstack):
+   - Mueve/duplica la lógica de `server.mjs` a un endpoint serverless `/api/generate`.
+   - Define `GEMINI_API_KEY` en las variables de entorno del proyecto en Vercel.
+   - El frontend seguirá usando `/api/generate`.
+
+2) GitHub Pages (frontend) + Backend externo (Render, Railway, Cloudflare, etc.):
+   - Hospeda el frontend estático con GitHub Pages (workflow incluido en `.github/workflows/deploy.yml`).
+   - Despliega el backend (la lógica de `server.mjs`) en un servicio con URL pública y define `GEMINI_API_KEY` allí.
+   - En GitHub, crea el secret `VITE_API_BASE` con la URL del backend (p. ej. `https://mi-backend.onrender.com`).
+   - El workflow de Pages construirá el sitio con `VITE_API_BASE` para que las llamadas vayan al backend.
 
 ## Scripts útiles
 
@@ -41,3 +52,9 @@ Para producción, crea un endpoint equivalente a `/api/generate` en tu backend o
 - `npm run dev:all`: Levanta backend y frontend en la misma terminal (Mac/Linux). Para detener ambos, cierra la terminal o mata el proceso de Node si queda en background.
 - `npm run build`: Build de producción.
 - `npm run preview`: Servir build local.
+
+## GitHub Pages
+
+- Al hacer push a `main`, el workflow `Deploy static site to GitHub Pages` compila y publica `dist/`.
+- La URL quedará en `https://<tu-usuario>.github.io/<nombre-del-repo>/`.
+- Si usas backend externo, añade el secret `VITE_API_BASE` en Settings → Secrets and variables → Actions.
