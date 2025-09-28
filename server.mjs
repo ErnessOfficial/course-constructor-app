@@ -78,6 +78,11 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   if (req.url === '/api/generate') return handleGenerate(req, res);
+  if (req.method === 'GET' && req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end('<!doctype html><html><body style="font-family:sans-serif"><h3>Backend de IA en ejecución</h3><p>Este puerto (8787) es solo para la API. Abre la app en <a href="http://localhost:3000">http://localhost:3000</a>.</p></body></html>');
+    return;
+  }
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not Found' }));
 });
@@ -85,4 +90,3 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`[server] Listening on http://localhost:${PORT}`);
 });
-
