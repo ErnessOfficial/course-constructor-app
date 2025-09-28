@@ -37,5 +37,7 @@ Para producción, crea un endpoint equivalente a `/api/generate` en tu backend o
 
 - `npm run dev`: Frontend en Vite.
 - `node server.mjs`: Backend mínimo para Gemini.
+- `npm run server`: Alias para `node server.mjs`.
+- `npm run dev:all`: Levanta backend y frontend en la misma terminal (Mac/Linux). Para detener ambos, cierra la terminal o mata el proceso de Node si queda en background.
 - `npm run build`: Build de producción.
 - `npm run preview`: Servir build local.
