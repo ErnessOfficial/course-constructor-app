@@ -64,4 +64,5 @@ Para producción, tienes dos opciones:
 
 - Al hacer push a `main`, el workflow `Deploy static site to GitHub Pages` compila y publica `dist/`.
 - La URL quedará en `https://<tu-usuario>.github.io/<nombre-del-repo>/`.
-- Si usas backend externo, añade el secret `VITE_API_BASE` en Settings → Secrets and variables → Actions.
+- Importante: GitHub Pages no ejecuta backend. Debes proveer un backend externo y definir el secret `VITE_API_BASE` en Settings → Secrets and variables → Actions con esa URL (p. ej. tu despliegue en Vercel/Render).
+- Si visitas la página sin `VITE_API_BASE` configurado, verás un aviso en la cabecera y el botón de probar IA permanecerá deshabilitado.

@@ -72,10 +72,13 @@ const App: FC = () => {
     const [step, setStep] = useState(1);
     const [testingAI, setTestingAI] = useState(false);
 
+    const IS_GH_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
+    const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+    const AI_AVAILABLE = !IS_GH_PAGES || Boolean(API_BASE);
+
     const handleTestAI = async () => {
         try {
             setTestingAI(true);
-            const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
             const res = await fetch(`${API_BASE}/api/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -129,11 +132,16 @@ const App: FC = () => {
             <header style={styles.header}>
                 <h1 style={styles.h1}><i className="fas fa-brain"></i> AI Course Creator</h1>
                 <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+                {IS_GH_PAGES && !API_BASE && (
+                    <p style={{color: '#dc3545', marginTop: '0.5rem'}}>
+                        Atención: Estás en GitHub Pages sin backend configurado. Define el secret <code>VITE_API_BASE</code> con la URL de tu backend o usa el despliegue en Vercel.
+                    </p>
+                )}
                 <div style={{ marginTop: '0.75rem' }}>
                     <button style={{...styles.button, ...styles.buttonAi}}
                             onClick={handleTestAI}
-                            disabled={testingAI}>
-                        {testingAI ? 'Probando conexión...' : 'Probar conexión a IA'}
+                            disabled={testingAI || !AI_AVAILABLE}>
+                        {testingAI ? 'Probando conexión...' : (AI_AVAILABLE ? 'Probar conexión a IA' : 'IA no disponible (configura backend)')}
                     </button>
                 </div>
             </header>
