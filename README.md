@@ -34,9 +34,10 @@ Tu clave queda solo en el backend local y no en el bundle del navegador. El arch
 Para producción, tienes dos opciones:
 
 1) Vercel (recomendado, fullstack):
-   - Mueve/duplica la lógica de `server.mjs` a un endpoint serverless `/api/generate`.
-   - Define `GEMINI_API_KEY` en las variables de entorno del proyecto en Vercel.
-   - El frontend seguirá usando `/api/generate`.
+   - Ya incluimos `api/generate.ts` (función serverless Node en Vercel).
+   - En el panel de Vercel, en tu proyecto, define la variable de entorno `GEMINI_API_KEY` (Production y Preview).
+   - Conecta el repo; Vercel detecta Vite y compila a `dist/`.
+   - El frontend llamará a `/api/generate` en el mismo dominio.
 
 2) GitHub Pages (frontend) + Backend externo (Render, Railway, Cloudflare, etc.):
    - Hospeda el frontend estático con GitHub Pages (workflow incluido en `.github/workflows/deploy.yml`).
