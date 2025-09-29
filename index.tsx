@@ -74,7 +74,23 @@ const App: FC = () => {
 
     const IS_GH_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
-    const AI_AVAILABLE = !IS_GH_PAGES || Boolean(API_BASE);
+    const [aiAvailable, setAiAvailable] = useState<boolean>(!IS_GH_PAGES || Boolean(API_BASE));
+
+    useEffect(() => {
+        let cancelled = false;
+        const probe = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/health`, { method: 'GET' });
+                if (!res.ok) throw new Error('health not ok');
+                const j = await res.json();
+                if (!cancelled) setAiAvailable(Boolean(j?.ok));
+            } catch {
+                if (!cancelled) setAiAvailable(false);
+            }
+        };
+        probe();
+        return () => { cancelled = true; };
+    }, [API_BASE]);
 
     const handleTestAI = async () => {
         try {
@@ -140,8 +156,8 @@ const App: FC = () => {
                 <div style={{ marginTop: '0.75rem' }}>
                     <button style={{...styles.button, ...styles.buttonAi}}
                             onClick={handleTestAI}
-                            disabled={testingAI || !AI_AVAILABLE}>
-                        {testingAI ? 'Probando conexión...' : (AI_AVAILABLE ? 'Probar conexión a IA' : 'IA no disponible (configura backend)')}
+                            disabled={testingAI || !aiAvailable}>
+                        {testingAI ? 'Probando conexión...' : (aiAvailable ? 'Probar conexión a IA' : 'IA no disponible (configura backend)')}
                     </button>
                 </div>
             </header>
