@@ -21,35 +21,57 @@ export default async function handler(req: any, res: any) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured on server');
 
-    const primaryModel = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-    const tryGenerate = async (modelName: string) => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: textPrompt }]}] })
-      });
-      return r;
-    };
+    const preferred = (process.env.GEMINI_MODEL || '').trim();
+    const modelCandidates = Array.from(new Set([
+      preferred || 'gemini-1.5-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
+    ])).filter(Boolean);
 
-    // Intento con el modelo principal
-    let resp = await tryGenerate(primaryModel);
+    const apiVersions = ['v1', 'v1beta'];
+    const errors: Array<{ version: string, model: string, status: number, message: string }> = [];
 
-    // Fallback automático si el modelo no existe o no soporta generateContent
-    if (resp.status === 404 && primaryModel !== 'gemini-1.5-flash') {
-      resp = await tryGenerate('gemini-1.5-flash');
+    let okText = '';
+    for (const version of apiVersions) {
+      for (const model of modelCandidates) {
+        const url = `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(model)}:generateContent`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+          },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: textPrompt }]}] })
+        });
+        const raw = await resp.text();
+        if (resp.ok) {
+          try {
+            const json = JSON.parse(raw);
+            const promptFeedback = json?.promptFeedback;
+            if (promptFeedback?.blockReason) {
+              res.status(400).json({ error: `Request blocked: ${promptFeedback.blockReason}` });
+              return;
+            }
+            const parts = json?.candidates?.[0]?.content?.parts || [];
+            okText = parts.map((p: any) => p?.text).filter(Boolean).join('\n');
+            res.status(200).json({ text: okText, model, version });
+            return;
+          } catch (e: any) {
+            res.status(200).json({ text: raw, model, version });
+            return;
+          }
+        } else {
+          let msg = raw;
+          try { const j = JSON.parse(raw); msg = j?.error?.message || j?.message || msg; } catch {}
+          errors.push({ version, model, status: resp.status, message: msg });
+        }
+      }
     }
 
-    const raw = await resp.text();
-    if (!resp.ok) {
-      let errMsg = raw;
-      try { const j = JSON.parse(raw); errMsg = j?.error?.message || j?.message || errMsg; } catch {}
-      res.status(resp.status).json({ error: `Gemini error ${resp.status}: ${errMsg}` });
-      return;
-    }
+    // Si llegamos aquí, todos fallaron
+    const detail = errors.map(e => `${e.version}/${e.model} -> ${e.status}: ${e.message}`).join(' | ');
+    res.status(400).json({ error: `Gemini failed for all candidates: ${detail}` });
+    return;
     let json: any = {};
     try { json = JSON.parse(raw); } catch { json = raw; }
     // Safety / prompt feedback handling
