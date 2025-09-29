@@ -79,6 +79,10 @@ const App: FC = () => {
     useEffect(() => {
         let cancelled = false;
         const probe = async () => {
+            if (IS_GH_PAGES && !API_BASE) {
+                setAiAvailable(false);
+                return; // evita 404 en GitHub Pages sin backend
+            }
             try {
                 const res = await fetch(`${API_BASE}/api/health`, { method: 'GET' });
                 if (!res.ok) throw new Error('health not ok');
@@ -90,7 +94,7 @@ const App: FC = () => {
         };
         probe();
         return () => { cancelled = true; };
-    }, [API_BASE]);
+    }, [API_BASE, IS_GH_PAGES]);
 
     const handleTestAI = async () => {
         try {
