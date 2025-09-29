@@ -21,16 +21,28 @@ export default async function handler(req: any, res: any) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured on server');
 
-    const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash-latest';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: textPrompt }]}] })
-    });
+    const primaryModel = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const tryGenerate = async (modelName: string) => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: textPrompt }]}] })
+      });
+      return r;
+    };
+
+    // Intento con el modelo principal
+    let resp = await tryGenerate(primaryModel);
+
+    // Fallback automático si el modelo no existe o no soporta generateContent
+    if (resp.status === 404 && primaryModel !== 'gemini-1.5-flash') {
+      resp = await tryGenerate('gemini-1.5-flash');
+    }
+
     const raw = await resp.text();
     if (!resp.ok) {
       let errMsg = raw;

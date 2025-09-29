@@ -38,6 +38,7 @@ Para producción, tienes dos opciones:
    - En el panel de Vercel, en tu proyecto, define la variable de entorno `GEMINI_API_KEY` (Production y Preview).
    - Conecta el repo; Vercel detecta Vite y compila a `dist/` (config también en `vercel.json`).
    - El frontend llamará a `/api/generate` en el mismo dominio.
+   - Opcional: define `GEMINI_MODEL` si quieres un modelo diferente. Por defecto usamos `gemini-1.5-flash`. Si ves errores 404 de modelo, prueba valores como `gemini-1.5-flash` o `gemini-1.5-pro`.
 
    Pasos rápidos en Vercel:
    - Import Project → selecciona este repo.
