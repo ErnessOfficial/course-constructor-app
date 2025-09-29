@@ -54,6 +54,12 @@ Para producción, tienes dos opciones:
 - `npm run build`: Build de producción.
 - `npm run preview`: Servir build local.
 
+## Probar conexión a IA
+
+- En la cabecera de la app hay un botón “Probar conexión a IA”.
+- Si estás en local y corriendo `npm run server`, el test usa el proxy.
+- En Vercel, el test llama al endpoint `/api/generate` del mismo dominio.
+
 ## GitHub Pages
 
 - Al hacer push a `main`, el workflow `Deploy static site to GitHub Pages` compila y publica `dist/`.

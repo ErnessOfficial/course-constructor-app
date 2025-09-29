@@ -70,6 +70,31 @@ const App: FC = () => {
     const [courses, setCourses] = useState<Course[]>([]);
     const [currentCourse, setCurrentCourse] = useState<Course | null>(null);
     const [step, setStep] = useState(1);
+    const [testingAI, setTestingAI] = useState(false);
+
+    const handleTestAI = async () => {
+        try {
+            setTestingAI(true);
+            const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+            const res = await fetch(`${API_BASE}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: 'Responde exactamente: PONG' })
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const txt: string = data?.text || '';
+            if (txt.trim().toUpperCase().includes('PONG')) {
+                alert('Conexión a IA OK (respuesta contiene PONG).');
+            } else {
+                alert('Conexión a IA respondió, pero el contenido no coincide (revisa la clave o el modelo).');
+            }
+        } catch (e: any) {
+            alert(`Error probando conexión a IA: ${e?.message || e}`);
+        } finally {
+            setTestingAI(false);
+        }
+    };
 
     const handleCreateNew = () => {
         setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
@@ -104,6 +129,13 @@ const App: FC = () => {
             <header style={styles.header}>
                 <h1 style={styles.h1}><i className="fas fa-brain"></i> AI Course Creator</h1>
                 <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+                <div style={{ marginTop: '0.75rem' }}>
+                    <button style={{...styles.button, ...styles.buttonAi}}
+                            onClick={handleTestAI}
+                            disabled={testingAI}>
+                        {testingAI ? 'Probando conexión...' : 'Probar conexión a IA'}
+                    </button>
+                </div>
             </header>
             
             {view === 'list' && <CourseList courses={courses} onCreateNew={handleCreateNew} />}
