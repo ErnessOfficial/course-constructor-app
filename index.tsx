@@ -104,7 +104,14 @@ const App: FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: 'Responde exactamente: PONG' })
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!res.ok) {
+                let msg = `HTTP ${res.status}`;
+                try {
+                    const err = await res.json();
+                    if (err?.error) msg = err.error;
+                } catch {}
+                throw new Error(msg);
+            }
             const data = await res.json();
             const txt: string = data?.text || '';
             if (txt.trim().toUpperCase().includes('PONG')) {
