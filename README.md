@@ -36,8 +36,14 @@ Para producción, tienes dos opciones:
 1) Vercel (recomendado, fullstack):
    - Ya incluimos `api/generate.ts` (función serverless Node en Vercel).
    - En el panel de Vercel, en tu proyecto, define la variable de entorno `GEMINI_API_KEY` (Production y Preview).
-   - Conecta el repo; Vercel detecta Vite y compila a `dist/`.
+   - Conecta el repo; Vercel detecta Vite y compila a `dist/` (config también en `vercel.json`).
    - El frontend llamará a `/api/generate` en el mismo dominio.
+
+   Pasos rápidos en Vercel:
+   - Import Project → selecciona este repo.
+   - Build & Output: Vercel lo autocompleta (o usa `vercel.json`).
+   - Environment Variables: agrega `GEMINI_API_KEY` y despliega.
+   - Abre tu dominio y usa “Probar conexión a IA”.
 
 2) GitHub Pages (frontend) + Backend externo (Render, Railway, Cloudflare, etc.):
    - Hospeda el frontend estático con GitHub Pages (workflow incluido en `.github/workflows/deploy.yml`).
