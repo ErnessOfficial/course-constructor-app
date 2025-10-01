@@ -22,53 +22,90 @@ export default async function handler(req: any, res: any) {
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured on server');
 
     const preferred = (process.env.GEMINI_MODEL || '').trim();
-    const modelCandidates = Array.from(new Set([
+    const manualCandidates = Array.from(new Set([
       preferred || 'gemini-1.5-flash',
       'gemini-1.5-flash',
-      'gemini-1.5-pro'
+      'gemini-1.5-pro',
+      'gemini-2.0-flash',
+      'gemini-2.0-pro'
     ])).filter(Boolean);
 
     const apiVersions = ['v1', 'v1beta'];
     const errors: Array<{ version: string, model: string, status: number, message: string }> = [];
 
-    let okText = '';
-    for (const version of apiVersions) {
-      for (const model of modelCandidates) {
-        const url = `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(model)}:generateContent`;
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey
-          },
-          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: textPrompt }]}] })
-        });
-        const raw = await resp.text();
-        if (resp.ok) {
-          try {
-            const json = JSON.parse(raw);
-            const promptFeedback = json?.promptFeedback;
-            if (promptFeedback?.blockReason) {
-              res.status(400).json({ error: `Request blocked: ${promptFeedback.blockReason}` });
-              return;
-            }
-            const parts = json?.candidates?.[0]?.content?.parts || [];
-            okText = parts.map((p: any) => p?.text).filter(Boolean).join('\n');
-            res.status(200).json({ text: okText, model, version });
-            return;
-          } catch (e: any) {
-            res.status(200).json({ text: raw, model, version });
-            return;
+    async function tryGenerate(version: string, model: string) {
+      const url = `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(model)}:generateContent`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: textPrompt }]}] })
+      });
+      const raw = await resp.text();
+      if (resp.ok) {
+        try {
+          const json = JSON.parse(raw);
+          const promptFeedback = json?.promptFeedback;
+          if (promptFeedback?.blockReason) {
+            res.status(400).json({ error: `Request blocked: ${promptFeedback.blockReason}` });
+            return true;
           }
-        } else {
-          let msg = raw;
-          try { const j = JSON.parse(raw); msg = j?.error?.message || j?.message || msg; } catch {}
-          errors.push({ version, model, status: resp.status, message: msg });
+          const parts = json?.candidates?.[0]?.content?.parts || [];
+          const out = parts.map((p: any) => p?.text).filter(Boolean).join('\n');
+          res.status(200).json({ text: out, model, version });
+          return true;
+        } catch {
+          res.status(200).json({ text: raw, model, version });
+          return true;
         }
+      } else {
+        let msg = raw;
+        try { const j = JSON.parse(raw); msg = j?.error?.message || j?.message || msg; } catch {}
+        errors.push({ version, model, status: resp.status, message: msg });
+        return false;
       }
     }
 
-    // Si llegamos aquí, todos fallaron
+    // 1) Intentar con candidatos manuales
+    for (const version of apiVersions) {
+      for (const model of manualCandidates) {
+        const ok = await tryGenerate(version, model);
+        if (ok) return;
+      }
+    }
+
+    // 2) Listar modelos disponibles con esta API key y elegir uno con generateContent
+    for (const version of apiVersions) {
+      const listUrl = `https://generativelanguage.googleapis.com/${version}/models`;
+      const listResp = await fetch(listUrl, {
+        headers: { 'x-goog-api-key': apiKey }
+      });
+      const raw = await listResp.text();
+      if (!listResp.ok) {
+        let msg = raw;
+        try { const j = JSON.parse(raw); msg = j?.error?.message || j?.message || msg; } catch {}
+        errors.push({ version, model: 'LIST', status: listResp.status, message: msg });
+        continue;
+      }
+      let models: any[] = [];
+      try {
+        const j = JSON.parse(raw);
+        models = j?.models || [];
+      } catch {}
+      // El campo puede venir como 'supportedGenerationMethods'
+      const candidate = models.find(m => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+                      || models.find(m => (m?.name || '').includes('gemini'))
+                      || models[0];
+      const name = (candidate?.name || '').replace(/^models\//, '');
+      if (name) {
+        const ok = await tryGenerate(version, name);
+        if (ok) return;
+      }
+    }
+
+    // Si llegamos aquí, todo falló
     const detail = errors.map(e => `${e.version}/${e.model} -> ${e.status}: ${e.message}`).join(' | ');
     res.status(400).json({ error: `Gemini failed for all candidates: ${detail}` });
     return;
