@@ -243,7 +243,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
         if (data.modules.length < 6) {
             setData(prev => ({
                 ...prev,
-                modules: [...prev.modules, { id: '', title: `Módulo ${prev.modules.length + 1}`, activities: [] }],
+                modules: [...prev.modules, { id: '', title: `Módulo ${prev.modules.length + 1}`, parts: [] }],
                 learningObjectives: [...prev.learningObjectives, `Objetivo del módulo ${prev.modules.length + 1}`]
             }));
         }
