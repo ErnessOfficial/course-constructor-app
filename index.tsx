@@ -837,9 +837,10 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
 interface ProfileData { firstName: string; lastName: string; company?: string; email: string; username: string; avatarDataUrl?: string; }
 
 const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, user, login, register } = useKindeAuth() as any;
+  const { isAuthenticated, isLoading, user, login, register, logout } = useKindeAuth() as any;
   const [needsProfile, setNeedsProfile] = useState(false);
   const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
+  const [showProfileEditor, setShowProfileEditor] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -875,17 +876,52 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
     const key = `profile:${uid}`;
     localStorage.setItem(key, JSON.stringify(profile));
     setNeedsProfile(false);
+    setShowProfileEditor(false);
   };
 
-  if (isLoading) return <div style={{ padding: 24 }}>Cargando autenticación...</div>;
+  const uid = user?.id || user?.sub || user?.email || 'anon';
+  const profileKey = `profile:${uid}`;
+  const storedProfile = (() => { try { return JSON.parse(localStorage.getItem(profileKey) || 'null'); } catch { return null; } })();
+  const avatarUrl = storedProfile?.avatarDataUrl as string | undefined;
+
+  const HeaderBar = (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '8px 16px' }}>
+      {!isAuthenticated ? (
+        <>
+          <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Entrar</button>
+          <button style={{ ...styles.button, padding: '8px 14px' }} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
+        </>
+      ) : (
+        <>
+          <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} type="button" onClick={() => {
+            // cargar perfil para el editor
+            const p = storedProfile || { firstName: user?.given_name || '', lastName: user?.family_name || '', company: '', email: user?.email || '', username: (user?.preferred_username || user?.email?.split('@')[0] || '').toLowerCase() };
+            setProfile(p);
+            setShowProfileEditor(true);
+          }}><i className="fas fa-user"></i> Perfil</button>
+          <button style={{ ...styles.button, padding: '8px 14px' }} type="button" onClick={() => logout?.()}><i className="fas fa-sign-out-alt"></i> Salir</button>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="avatar" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+          ) : (
+            <i className="fas fa-user-circle" style={{ fontSize: 28, color: 'var(--muted-color)', alignSelf: 'center' }}></i>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  if (isLoading) return <div>{HeaderBar}<div style={{ padding: 24 }}>Cargando autenticación...</div></div>;
   if (!isAuthenticated) {
     return (
-      <div style={{ maxWidth: 520, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
-        <h2 style={{ marginTop: 0 }}>Bienvenido a AI Course Creator</h2>
-        <p>Accede o crea tu cuenta para continuar.</p>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-          <button style={styles.button} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
-          <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Iniciar sesión</button>
+      <div>
+        {HeaderBar}
+        <div style={{ maxWidth: 520, margin: '20px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
+          <h2 style={{ marginTop: 0 }}>Bienvenido a AI Course Creator</h2>
+          <p>Accede o crea tu cuenta para continuar.</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+            <button style={styles.button} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
+            <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Iniciar sesión</button>
+          </div>
         </div>
       </div>
     );
@@ -893,45 +929,134 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (needsProfile) {
     return (
-      <div style={{ maxWidth: 720, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)' }}>
-        <h2 style={{ marginTop: 0 }}>Completa tu perfil</h2>
-        <form onSubmit={handleProfileSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={styles.label}>Nombre</label>
-              <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
+      <div>
+        {HeaderBar}
+        <div style={{ maxWidth: 720, margin: '20px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)' }}>
+          <h2 style={{ marginTop: 0 }}>Completa tu perfil</h2>
+          <form onSubmit={handleProfileSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={styles.label}>Nombre</label>
+                <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
+              </div>
+              <div>
+                <label style={styles.label}>Apellido</label>
+                <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
+              </div>
+              <div>
+                <label style={styles.label}>Empresa (opcional)</label>
+                <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
+              </div>
+              <div>
+                <label style={styles.label}>Correo electrónico</label>
+                <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
+              </div>
+              <div>
+                <label style={styles.label}>Nombre de usuario</label>
+                <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
+              </div>
+              <div>
+                <label style={styles.label}>Avatar / Foto</label>
+                <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
+                {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
+              </div>
             </div>
-            <div>
-              <label style={styles.label}>Apellido</label>
-              <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button style={styles.button} type="submit">Guardar perfil</button>
             </div>
-            <div>
-              <label style={styles.label}>Empresa (opcional)</label>
-              <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
-            </div>
-            <div>
-              <label style={styles.label}>Correo electrónico</label>
-              <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
-            </div>
-            <div>
-              <label style={styles.label}>Nombre de usuario</label>
-              <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
-            </div>
-            <div>
-              <label style={styles.label}>Avatar / Foto</label>
-              <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
-              {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
+          </form>
+        </div>
+        {/* Editor de perfil invocable desde el header */}
+        {showProfileEditor && (
+          <div style={styles.modalOverlay} onClick={() => setShowProfileEditor(false)}>
+            <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+              <h3>Editar perfil</h3>
+              <form onSubmit={handleProfileSubmit}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={styles.label}>Nombre</label>
+                    <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Apellido</label>
+                    <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Empresa (opcional)</label>
+                    <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Correo electrónico</label>
+                    <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Nombre de usuario</label>
+                    <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Avatar / Foto</label>
+                    <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
+                    {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, gap: 8 }}>
+                  <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={() => setShowProfileEditor(false)}>Cancelar</button>
+                  <button style={styles.button} type="submit">Guardar</button>
+                </div>
+              </form>
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-            <button style={styles.button} type="submit">Guardar perfil</button>
-          </div>
-        </form>
+        )}
       </div>
     );
   }
 
-  return <>{children}</>;
+  return (
+    <div>
+      {HeaderBar}
+      {children}
+      {showProfileEditor && (
+        <div style={styles.modalOverlay} onClick={() => setShowProfileEditor(false)}>
+          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h3>Editar perfil</h3>
+            <form onSubmit={handleProfileSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={styles.label}>Nombre</label>
+                  <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
+                </div>
+                <div>
+                  <label style={styles.label}>Apellido</label>
+                  <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
+                </div>
+                <div>
+                  <label style={styles.label}>Empresa (opcional)</label>
+                  <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
+                </div>
+                <div>
+                  <label style={styles.label}>Correo electrónico</label>
+                  <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
+                </div>
+                <div>
+                  <label style={styles.label}>Nombre de usuario</label>
+                  <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
+                </div>
+                <div>
+                  <label style={styles.label}>Avatar / Foto</label>
+                  <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
+                  {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, gap: 8 }}>
+                <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={() => setShowProfileEditor(false)}>Cancelar</button>
+                <button style={styles.button} type="submit">Guardar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const KindeWrappedApp: FC = () => {
