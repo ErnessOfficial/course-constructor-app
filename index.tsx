@@ -15,7 +15,8 @@ interface QuizQuestion { question: string; options: { text: string; feedback: st
 interface QuizActivity extends BaseActivity { type: 'quiz'; questions: QuizQuestion[]; }
 interface IFrameActivity extends BaseActivity { type: 'iframe'; html: string; }
 type Activity = TextActivity | VideoActivity | AudioActivity | QuizActivity | IFrameActivity | ImageActivity;
-interface Module { id: string; title: string; activities: Activity[]; }
+interface ModulePart { id: string; title: string; resources: Activity[]; }
+interface Module { id: string; title: string; parts: ModulePart[]; }
 interface Course { id: string; title: string; subtitle: string; description: string; category: string; broadCategories: BroadCategory[]; coverImage: string; instructor: Instructor; learningObjectives: string[]; modules: Module[]; }
 
 // --- STYLES OBJECT ---
@@ -143,7 +144,7 @@ const App: FC = () => {
             ...courseData,
             id: slug || `curso-${Date.now()}`,
             coverImage: `${slug || 'curso'}_portada.png`,
-            modules: courseData.modules.map((m, i) => ({ id: `m${i + 1}`, title: m.title, activities: [] })),
+            modules: courseData.modules.map((m, i) => ({ id: `m${i + 1}`, title: m.title, parts: [] })),
         };
         setCurrentCourse(finalCourseData);
         setStep(2);
@@ -347,19 +348,42 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
 const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = ({ course, onFinish }) => {
     const [currentCourse, setCurrentCourse] = useState(course);
     const [activeModuleIndex, setActiveModuleIndex] = useState(0);
-    const [geminiTarget, setGeminiTarget] = useState<{ modIndex: number, actIndex: number } | null>(null);
+    const [activePartIndex, setActivePartIndex] = useState(0);
+    const [geminiTarget, setGeminiTarget] = useState<{ modIndex: number, partIndex: number, resIndex: number } | null>(null);
 
-    const updateActivity = (modIndex: number, actIndex: number, updatedActivity: Activity) => {
+    const ensureAtLeastOnePart = (courseState: Course, modIndex: number) => {
+        if (!courseState.modules[modIndex].parts) courseState.modules[modIndex].parts = [];
+        if (courseState.modules[modIndex].parts.length === 0) {
+            courseState.modules[modIndex].parts.push({ id: `m${modIndex + 1}p1`, title: 'Parte 1', resources: [] });
+        }
+    };
+
+    const addPart = () => {
+        const modIndex = activeModuleIndex;
         const newCourse = { ...currentCourse };
-        newCourse.modules[modIndex].activities[actIndex] = updatedActivity;
+        const parts = newCourse.modules[modIndex].parts || [];
+        const nextNum = parts.length + 1;
+        parts.push({ id: `m${modIndex + 1}p${nextNum}`, title: `Parte ${nextNum}`, resources: [] });
+        newCourse.modules[modIndex].parts = parts;
+        setCurrentCourse(newCourse);
+        setActivePartIndex(parts.length - 1);
+    };
+
+    const updateResource = (modIndex: number, partIndex: number, resIndex: number, updatedActivity: Activity) => {
+        const newCourse = { ...currentCourse };
+        ensureAtLeastOnePart(newCourse, modIndex);
+        newCourse.modules[modIndex].parts[partIndex].resources[resIndex] = updatedActivity;
         setCurrentCourse(newCourse);
     };
 
     const addActivity = (type: ActivityType, openAiModal: boolean = false) => {
         const modIndex = activeModuleIndex;
-        const activities = currentCourse.modules[modIndex].activities;
+        const newCourse = { ...currentCourse };
+        ensureAtLeastOnePart(newCourse, modIndex);
+        const partIndex = activePartIndex;
+        const resources = newCourse.modules[modIndex].parts[partIndex].resources;
         const newActivity: Activity = {
-            id: `m${modIndex + 1}a${activities.length + 1}`,
+            id: `m${modIndex + 1}p${partIndex + 1}r${resources.length + 1}`,
             title: `Nueva Actividad (${type})`,
             description: 'Descripción de la actividad',
             type: type,
@@ -370,20 +394,19 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
             ...(type === 'quiz' && { questions: [] }),
             ...(type === 'iframe' && { html: '<!-- Pega tu código HTML aquí -->' }),
         };
-        const newCourse = { ...currentCourse };
-        newCourse.modules[modIndex].activities.push(newActivity);
+        newCourse.modules[modIndex].parts[partIndex].resources.push(newActivity);
         setCurrentCourse(newCourse);
 
         if (openAiModal) {
-            setGeminiTarget({ modIndex, actIndex: activities.length });
+            setGeminiTarget({ modIndex, partIndex, resIndex: resources.length });
         }
     };
     
     const handleGeminiInsert = (content: string) => {
         if (!geminiTarget) return;
         
-        const { modIndex, actIndex } = geminiTarget;
-        const activity = currentCourse.modules[modIndex].activities[actIndex];
+        const { modIndex, partIndex, resIndex } = geminiTarget;
+        const activity = currentCourse.modules[modIndex].parts[partIndex].resources[resIndex];
 
         if (activity.type === 'quiz') {
             try {
@@ -391,7 +414,7 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
                 const sanitizedContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
                 const questions = JSON.parse(sanitizedContent);
                 if (Array.isArray(questions) && questions.length > 0) {
-                    updateActivity(modIndex, actIndex, { ...activity, questions });
+                    updateResource(modIndex, partIndex, resIndex, { ...activity, questions });
                 } else {
                     alert("La IA no generó preguntas válidas. Inténtalo de nuevo.");
                 }
@@ -399,7 +422,7 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
                 alert("Error al procesar el JSON del Quiz. Revisa el formato.");
             }
         } else if (activity.type === 'iframe') {
-            updateActivity(modIndex, actIndex, { ...activity, html: content });
+            updateResource(modIndex, partIndex, resIndex, { ...activity, html: content });
         }
         setGeminiTarget(null);
     };
@@ -417,12 +440,26 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
 
             <div>
                 <p><strong>Objetivo:</strong> {currentCourse.learningObjectives[activeModuleIndex]}</p>
-                {currentCourse.modules[activeModuleIndex].activities.map((act, actIndex) => (
+                {/* Partes del módulo */}
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {(currentCourse.modules[activeModuleIndex].parts || []).map((part, pIndex) => (
+                        <div key={part.id} style={pIndex === activePartIndex ? { ...styles.tag, backgroundColor: 'var(--primary-color)', color: 'white', cursor: 'pointer' } : { ...styles.tag, cursor: 'pointer' }} onClick={() => setActivePartIndex(pIndex)}>
+                            {part.title}
+                        </div>
+                    ))}
+                    <button style={{...styles.button, ...styles.buttonSecondary, padding: '6px 12px'}} type="button" onClick={addPart}>
+                        <i className="fas fa-plus"></i> Añadir Parte
+                    </button>
+                </div>
+
+                {/* Recursos de la parte activa */}
+                {(currentCourse.modules[activeModuleIndex].parts && currentCourse.modules[activeModuleIndex].parts.length > 0) &&
+                 currentCourse.modules[activeModuleIndex].parts[activePartIndex].resources.map((act, resIndex) => (
                     <ActivityEditor 
-                        key={`${act.id}-${actIndex}`}
+                        key={`${act.id}-${resIndex}`}
                         activity={act}
-                        onChange={(updated) => updateActivity(activeModuleIndex, actIndex, updated)}
-                        onGenerateWithAI={() => setGeminiTarget({ modIndex: activeModuleIndex, actIndex })}
+                        onChange={(updated) => updateResource(activeModuleIndex, activePartIndex, resIndex, updated)}
+                        onGenerateWithAI={() => setGeminiTarget({ modIndex: activeModuleIndex, partIndex: activePartIndex, resIndex })}
                     />
                 ))}
                 <div style={{marginTop: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '10px'}}>
@@ -595,18 +632,22 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
             modules: course.modules.map((mod, modIndex) => ({
                 id: `m${modIndex + 1}`,
                 title: mod.title,
-                activities: mod.activities.map((act, actIndex) => {
-                    const base = { id: `m${modIndex + 1}a${actIndex + 1}`, title: act.title, description: act.description, type: act.type };
-                    switch (act.type) {
-                        case 'video': return { ...base, videoSrc: `/videos/${sanitizeForPath(act.videoSrc)}` };
-                        case 'audio': return { ...base, audioSrc: `/audios/${sanitizeForPath(act.audioSrc)}` };
-                        case 'text': return { ...base, content: act.content };
-                        case 'quiz': return { ...base, questions: act.questions };
-                        case 'image': return {...base, type: 'text', content: [`<img src="/images/${sanitizeForPath(act.imageSrc)}" alt="${act.title}" style="width:100%;height:auto;border-radius:8px;" />`] };
-                        case 'iframe': return {...base, type: 'iframe', content: [act.html] };
-                        default: return base;
-                    }
-                })
+                parts: (mod.parts || []).map((part, pIndex) => ({
+                    id: `m${modIndex + 1}p${pIndex + 1}`,
+                    title: part.title,
+                    resources: (part.resources || []).map((act, rIndex) => {
+                        const base = { id: `m${modIndex + 1}p${pIndex + 1}r${rIndex + 1}`, title: act.title, description: act.description, type: act.type };
+                        switch (act.type) {
+                            case 'video': return { ...base, videoSrc: `/videos/${sanitizeForPath(act.videoSrc)}` };
+                            case 'audio': return { ...base, audioSrc: `/audios/${sanitizeForPath(act.audioSrc)}` };
+                            case 'text': return { ...base, content: act.content };
+                            case 'quiz': return { ...base, questions: act.questions };
+                            case 'image': return { ...base, type: 'text', content: [`<img src="/images/${sanitizeForPath(act.imageSrc)}" alt="${act.title}" style="width:100%;height:auto;border-radius:8px;" />`] };
+                            case 'iframe': return { ...base, type: 'iframe', content: [act.html] };
+                            default: return base;
+                        }
+                    })
+                }))
             }))
         }, null, 2);
 
@@ -617,10 +658,12 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
         const fileList = new Set<string>();
         fileList.add(`/images/${sanitizeForPath(course.coverImage)}`);
         course.modules.forEach(mod => {
-            mod.activities.forEach(act => {
-                if (act.type === 'video') fileList.add(`/videos/${sanitizeForPath(act.videoSrc)}`);
-                if (act.type === 'audio') fileList.add(`/audios/${sanitizeForPath(act.audioSrc)}`);
-                if (act.type === 'image') fileList.add(`/images/${sanitizeForPath(act.imageSrc)}`);
+            (mod.parts || []).forEach(part => {
+                (part.resources || []).forEach(act => {
+                    if (act.type === 'video') fileList.add(`/videos/${sanitizeForPath(act.videoSrc)}`);
+                    if (act.type === 'audio') fileList.add(`/audios/${sanitizeForPath(act.audioSrc)}`);
+                    if (act.type === 'image') fileList.add(`/images/${sanitizeForPath(act.imageSrc)}`);
+                });
             });
         });
         return Array.from(fileList);
