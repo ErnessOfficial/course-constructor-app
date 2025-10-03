@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, FC, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 // Gemini calls are proxied via our backend at /api/generate
+import { KindeProvider, useKindeAuth } from '@kinde-oss/kinde-auth-react';
 
 // --- TYPE DEFINITIONS (as per project structure) ---
 type BroadCategory = 'Autoconocimiento' | 'Gestión Emocional' | 'Habilidades Sociales';
@@ -832,5 +833,121 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
     );
 };
 
+// --- AUTH GATE & SETUP ---
+interface ProfileData { firstName: string; lastName: string; company?: string; email: string; username: string; avatarDataUrl?: string; }
+
+const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading, user, login, register } = useKindeAuth() as any;
+  const [needsProfile, setNeedsProfile] = useState(false);
+  const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) return;
+    const uid = user?.id || user?.sub || user?.email || 'anon';
+    const key = `profile:${uid}`;
+    const stored = localStorage.getItem(key);
+    if (!stored) {
+      setProfile({
+        firstName: user?.given_name || '',
+        lastName: user?.family_name || '',
+        company: '',
+        email: user?.email || '',
+        username: (user?.preferred_username || user?.email?.split('@')[0] || '').toLowerCase(),
+      });
+      setNeedsProfile(true);
+    } else {
+      setNeedsProfile(false);
+    }
+  }, [isAuthenticated, isLoading, user]);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setProfile(prev => ({ ...prev, avatarDataUrl: String(reader.result) }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const uid = user?.id || user?.sub || user?.email || 'anon';
+    const key = `profile:${uid}`;
+    localStorage.setItem(key, JSON.stringify(profile));
+    setNeedsProfile(false);
+  };
+
+  if (isLoading) return <div style={{ padding: 24 }}>Cargando autenticación...</div>;
+  if (!isAuthenticated) {
+    return (
+      <div style={{ maxWidth: 520, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
+        <h2 style={{ marginTop: 0 }}>Bienvenido a AI Course Creator</h2>
+        <p>Accede o crea tu cuenta para continuar.</p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+          <button style={styles.button} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
+          <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Iniciar sesión</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsProfile) {
+    return (
+      <div style={{ maxWidth: 720, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)' }}>
+        <h2 style={{ marginTop: 0 }}>Completa tu perfil</h2>
+        <form onSubmit={handleProfileSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={styles.label}>Nombre</label>
+              <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
+            </div>
+            <div>
+              <label style={styles.label}>Apellido</label>
+              <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
+            </div>
+            <div>
+              <label style={styles.label}>Empresa (opcional)</label>
+              <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
+            </div>
+            <div>
+              <label style={styles.label}>Correo electrónico</label>
+              <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
+            </div>
+            <div>
+              <label style={styles.label}>Nombre de usuario</label>
+              <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
+            </div>
+            <div>
+              <label style={styles.label}>Avatar / Foto</label>
+              <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
+              {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button style={styles.button} type="submit">Guardar perfil</button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
+
+const KindeWrappedApp: FC = () => {
+  const domain = (import.meta as any).env?.VITE_KINDE_DOMAIN || 'https://animikrea.kinde.com';
+  const clientId = (import.meta as any).env?.VITE_KINDE_CLIENT_ID || '499609149459408789fc958770cd4375';
+  const redirectUri = (import.meta as any).env?.VITE_KINDE_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+  const logoutUri = (import.meta as any).env?.VITE_KINDE_LOGOUT_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
+  return (
+    <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
+      <AuthGate>
+        <App />
+      </AuthGate>
+    </KindeProvider>
+  );
+};
+
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
-root.render(<React.StrictMode><App /></React.StrictMode>);
+root.render(<React.StrictMode><KindeWrappedApp /></React.StrictMode>);

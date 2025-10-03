@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "react-dom": "^19.1.1",
-    "react": "^19.1.1"
+    "react": "^19.1.1",
+    "@kinde-oss/kinde-auth-react": "^2.0.16"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

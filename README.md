@@ -73,3 +73,14 @@ Para producción, tienes dos opciones:
 - La URL quedará en `https://<tu-usuario>.github.io/<nombre-del-repo>/`.
 - Importante: GitHub Pages no ejecuta backend. Debes proveer un backend externo y definir el secret `VITE_API_BASE` en Settings → Secrets and variables → Actions con esa URL (p. ej. tu despliegue en Vercel/Render).
 - Si visitas la página sin `VITE_API_BASE` configurado, verás un aviso en la cabecera y el botón de probar IA permanecerá deshabilitado.
+## Autenticación con Kinde (React)
+
+- Dependencia: `@kinde-oss/kinde-auth-react` (ya incluida en package.json).
+- Variables (local `.env.local` y en Vercel con prefijo `VITE_`):
+  - `VITE_KINDE_DOMAIN=https://animikrea.kinde.com`
+  - `VITE_KINDE_CLIENT_ID=499609149459408789fc958770cd4375`
+  - `VITE_KINDE_REDIRECT_URI=http://localhost:3000` (en prod usa tu dominio)
+  - `VITE_KINDE_LOGOUT_REDIRECT_URI=http://localhost:3000` (en prod usa tu dominio)
+- La app está envuelta con `KindeProvider` y un `AuthGate` simple:
+  - Antes de entrar, verás una pantalla con botones “Registrarse” e “Iniciar sesión”.
+  - En el primer acceso tras registro, se abre un formulario para completar el perfil (nombre, apellido, empresa opcional, email, usuario y avatar). Se guarda en `localStorage` por usuario.
