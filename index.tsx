@@ -544,7 +544,10 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
             <textarea style={{...styles.textarea, minHeight: '60px', marginBottom: '1rem'}} value={activity.description} onChange={e => handleChange('description', e.target.value)} />
 
             {activity.type === 'text' && (
-                <textarea style={styles.textarea} value={activity.content.join('\n\n')} onChange={e => handleChange('content', e.target.value.split('\n\n'))} />
+                <RichTextEditor
+                  valueHTML={Array.isArray(activity.content) ? (activity.content.find(c => c.includes('<')) || activity.content.map(p => `<p>${p}</p>`).join('\n')) : ''}
+                  onChangeHTML={(html) => handleChange('content', [html])}
+                />
             )}
             {activity.type === 'video' && (
                 <input style={styles.input} value={activity.videoSrc} onChange={e => handleChange('videoSrc', e.target.value)} placeholder="ej: intro_curso.mp4" />
@@ -567,6 +570,80 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
                     <button style={{...styles.button, ...styles.buttonAi}} onClick={onGenerateWithAI}><i className="fas fa-magic"></i> Generar Quiz con IA</button>
                 </div>
             )}
+        </div>
+    );
+};
+
+// --- SIMPLE RICH TEXT EDITOR FOR TEXT RESOURCES ---
+const toolbarButtonStyle: React.CSSProperties = { padding: '6px 10px', border: '1px solid var(--border-color)', background: 'var(--surface-color)', cursor: 'pointer', borderRadius: 6 };
+
+const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => void }> = ({ valueHTML, onChangeHTML }) => {
+    const editorRef = React.useRef<HTMLDivElement | null>(null);
+    const [html, setHtml] = useState<string>(valueHTML || '<p>Escribe aquí tu contenido.</p>');
+
+    useEffect(() => {
+        setHtml(valueHTML || '<p>Escribe aquí tu contenido.</p>');
+    }, [valueHTML]);
+
+    const applyCmd = (cmd: string, val?: string) => {
+        // execCommand está deprecado pero sigue ampliamente soportado y sirve para nuestro caso simple
+        document.execCommand(cmd, false, val);
+        syncHtml();
+    };
+
+    const wrapSelection = (tag: 'mark') => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        const el = document.createElement(tag);
+        el.setAttribute('style', 'background-color: #fff3a0;');
+        range.surroundContents(el);
+        syncHtml();
+    };
+
+    const setBlock = (block: 'H1' | 'H2' | 'H3' | 'P') => {
+        document.execCommand('formatBlock', false, block);
+        // Ajustes de estilo mínimos acorde a la app
+        const node = editorRef.current;
+        if (node) {
+            node.querySelectorAll('h1').forEach(n => (n as HTMLElement).style.cssText = 'font-size: 1.75rem; color: var(--text-color); margin: 0.5rem 0;');
+            node.querySelectorAll('h2').forEach(n => (n as HTMLElement).style.cssText = 'font-size: 1.35rem; color: var(--text-color); margin: 0.5rem 0;');
+            node.querySelectorAll('h3').forEach(n => (n as HTMLElement).style.cssText = 'font-size: 1.15rem; color: var(--text-color); margin: 0.5rem 0;');
+            node.querySelectorAll('p').forEach(n => (n as HTMLElement).style.cssText = 'font-size: 1rem; color: var(--text-color); line-height: 1.6;');
+        }
+        syncHtml();
+    };
+
+    const syncHtml = () => {
+        const node = editorRef.current;
+        if (!node) return;
+        const newHtml = node.innerHTML;
+        setHtml(newHtml);
+        onChangeHTML(newHtml);
+    };
+
+    return (
+        <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', gap: 8, padding: 8, borderBottom: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
+                <button type="button" title="Negrita" style={toolbarButtonStyle} onClick={() => applyCmd('bold')}><i className="fas fa-bold"></i></button>
+                <button type="button" title="Cursiva" style={toolbarButtonStyle} onClick={() => applyCmd('italic')}><i className="fas fa-italic"></i></button>
+                <button type="button" title="Subrayado" style={toolbarButtonStyle} onClick={() => applyCmd('underline')}><i className="fas fa-underline"></i></button>
+                <button type="button" title="Resaltado" style={toolbarButtonStyle} onClick={() => wrapSelection('mark')}><i className="fas fa-highlighter"></i></button>
+                <div style={{ width: 1, background: 'var(--border-color)' }} />
+                <button type="button" title="Nivel 1 - Título" style={toolbarButtonStyle} onClick={() => setBlock('H1')}>H1</button>
+                <button type="button" title="Nivel 2 - Subtítulo" style={toolbarButtonStyle} onClick={() => setBlock('H2')}>H2</button>
+                <button type="button" title="Nivel 3 - Encabezado" style={toolbarButtonStyle} onClick={() => setBlock('H3')}>H3</button>
+                <button type="button" title="Nivel 4 - Texto" style={toolbarButtonStyle} onClick={() => setBlock('P')}>P</button>
+            </div>
+            <div
+                ref={editorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={syncHtml}
+                onBlur={syncHtml}
+                style={{ minHeight: 140, padding: 12, outline: 'none' }}
+                dangerouslySetInnerHTML={{ __html: html }}
+            />
         </div>
     );
 };
