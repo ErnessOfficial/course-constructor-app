@@ -369,6 +369,29 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
         setActivePartIndex(parts.length - 1);
     };
 
+    const removeResource = (modIndex: number, partIndex: number, resIndex: number) => {
+        const newCourse = { ...currentCourse };
+        ensureAtLeastOnePart(newCourse, modIndex);
+        const resources = newCourse.modules[modIndex].parts[partIndex].resources || [];
+        resources.splice(resIndex, 1);
+        newCourse.modules[modIndex].parts[partIndex].resources = resources.map((r, idx) => ({ ...r, id: `m${modIndex + 1}p${partIndex + 1}r${idx + 1}` }));
+        setCurrentCourse(newCourse);
+        setGeminiTarget(null);
+    };
+
+    const moveResource = (modIndex: number, partIndex: number, resIndex: number, direction: 'up' | 'down') => {
+        const newCourse = { ...currentCourse };
+        ensureAtLeastOnePart(newCourse, modIndex);
+        const resources = newCourse.modules[modIndex].parts[partIndex].resources || [];
+        const targetIndex = direction === 'up' ? resIndex - 1 : resIndex + 1;
+        if (targetIndex < 0 || targetIndex >= resources.length) return;
+        const temp = resources[resIndex];
+        resources[resIndex] = resources[targetIndex];
+        resources[targetIndex] = temp;
+        newCourse.modules[modIndex].parts[partIndex].resources = resources.map((r, idx) => ({ ...r, id: `m${modIndex + 1}p${partIndex + 1}r${idx + 1}` }));
+        setCurrentCourse(newCourse);
+    };
+
     const updateResource = (modIndex: number, partIndex: number, resIndex: number, updatedActivity: Activity) => {
         const newCourse = { ...currentCourse };
         ensureAtLeastOnePart(newCourse, modIndex);
@@ -454,13 +477,42 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
 
                 {/* Recursos de la parte activa */}
                 {(currentCourse.modules[activeModuleIndex].parts && currentCourse.modules[activeModuleIndex].parts.length > 0) &&
-                 currentCourse.modules[activeModuleIndex].parts[activePartIndex].resources.map((act, resIndex) => (
-                    <ActivityEditor 
-                        key={`${act.id}-${resIndex}`}
-                        activity={act}
-                        onChange={(updated) => updateResource(activeModuleIndex, activePartIndex, resIndex, updated)}
-                        onGenerateWithAI={() => setGeminiTarget({ modIndex: activeModuleIndex, partIndex: activePartIndex, resIndex })}
-                    />
+                 currentCourse.modules[activeModuleIndex].parts[activePartIndex].resources.map((act, resIndex, arr) => (
+                    <div key={`${act.id}-${resIndex}`} style={{ position: 'relative' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '6px' }}>
+                            <button
+                                title="Subir"
+                                style={{...styles.button, ...styles.buttonSecondary, padding: '6px 10px'}}
+                                disabled={resIndex === 0}
+                                onClick={() => moveResource(activeModuleIndex, activePartIndex, resIndex, 'up')}
+                                type="button"
+                            >
+                                <i className="fas fa-arrow-up"></i>
+                            </button>
+                            <button
+                                title="Bajar"
+                                style={{...styles.button, ...styles.buttonSecondary, padding: '6px 10px'}}
+                                disabled={resIndex === arr.length - 1}
+                                onClick={() => moveResource(activeModuleIndex, activePartIndex, resIndex, 'down')}
+                                type="button"
+                            >
+                                <i className="fas fa-arrow-down"></i>
+                            </button>
+                            <button
+                                title="Eliminar"
+                                style={{...styles.button, ...styles.buttonDanger, padding: '6px 10px'}}
+                                onClick={() => removeResource(activeModuleIndex, activePartIndex, resIndex)}
+                                type="button"
+                            >
+                                <i className="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <ActivityEditor 
+                            activity={act}
+                            onChange={(updated) => updateResource(activeModuleIndex, activePartIndex, resIndex, updated)}
+                            onGenerateWithAI={() => setGeminiTarget({ modIndex: activeModuleIndex, partIndex: activePartIndex, resIndex })}
+                        />
+                    </div>
                 ))}
                 <div style={{marginTop: '1.5rem', display: 'flex', flexWrap: 'wrap', gap: '10px'}}>
                     <button style={{...styles.button, ...styles.buttonSecondary}} onClick={() => addActivity('text')}><i className="fas fa-paragraph"></i> Texto</button>
