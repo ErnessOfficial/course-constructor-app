@@ -129,7 +129,17 @@ const App: FC = () => {
     };
 
     const handleCreateNew = () => {
-        setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
+        try {
+            const draft = localStorage.getItem('draftCourse');
+            if (draft) {
+                const parsed = JSON.parse(draft);
+                setCurrentCourse(parsed);
+            } else {
+                setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
+            }
+        } catch {
+            setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
+        }
         setStep(1);
         setView('create');
     };
@@ -159,8 +169,10 @@ const App: FC = () => {
     return (
         <div style={styles.appContainer}>
             <header style={styles.header}>
-                <h1 style={styles.h1}><i className="fas fa-brain"></i> AI Course Creator</h1>
-                <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxHeight: 56, height: '56px', width: 'auto' }} />
+                    <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+                </div>
                 {IS_GH_PAGES && !API_BASE && (
                     <p style={{color: '#dc3545', marginTop: '0.5rem'}}>
                         Atención: Estás en GitHub Pages sin backend configurado. Define el secret <code>VITE_API_BASE</code> con la URL de tu backend o usa el despliegue en Vercel.
@@ -173,6 +185,9 @@ const App: FC = () => {
                         {testingAI ? 'Probando conexión...' : (aiAvailable ? 'Probar conexión a IA' : 'IA no disponible (configura backend)')}
                     </button>
                 </div>
+                {view === 'create' && step === 1 && (
+                  <h3 style={{ color: 'var(--primary-color)', marginTop: '16px' }}>Paso 1: Crea la ficha del curso completando el siguiente formulario</h3>
+                )}
             </header>
             
             {view === 'list' && <CourseList courses={courses} onCreateNew={handleCreateNew} />}
@@ -204,9 +219,12 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void }> = ({ course
     </div>
 );
 
+import { useKindeAuth as useKindeAuthInForm } from '@kinde-oss/kinde-auth-react';
+
 const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void }> = ({ course, onSubmit, onCancel }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
+    const { logout } = (useKindeAuthInForm() as any) || {};
     
     const validTags: Record<string, BroadCategory> = {
       'autoconocimiento': 'Autoconocimiento',
@@ -224,7 +242,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     };
     
     const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && tagInput.trim() !== '' && data.broadCategories.length < 4) {
+        if (e.key === 'Enter' && tagInput.trim() !== '' && data.broadCategories.length < 10) {
             e.preventDefault();
             const cleanInput = tagInput.trim().toLowerCase();
             const newTag = validTags[cleanInput];
@@ -264,7 +282,16 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        try { localStorage.removeItem('draftCourse'); } catch {}
         onSubmit(data);
+    };
+
+    const handleSaveAndExit = () => {
+        try {
+            localStorage.setItem('draftCourse', JSON.stringify(data));
+        } catch {}
+        if (typeof window !== 'undefined') alert('Ficha guardada localmente. Puedes retomar más tarde desde Crear Nuevo Curso.');
+        logout?.();
     };
 
     const categoryOptions = [
@@ -314,7 +341,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 </div>
             </div>
             <div style={styles.inputGroup}>
-                <label style={styles.label}>Etiquetas (máx. 4)</label>
+                <label style={styles.label}>Etiquetas (máx. 10)</label>
                 <div>
                     {data.broadCategories.map(tag => 
                       <span key={tag} style={styles.tag}>
@@ -324,7 +351,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 </div>
                 <input style={styles.input} type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleTagKeyDown} placeholder="Escribe y presiona Enter..." />
                  <small style={{ color: 'var(--muted-color)', marginTop: '5px', display: 'block' }}>
-                    Valores permitidos: Autoconocimiento, Gestión Emocional, Habilidades Sociales.
+                    Valores permitidos: Autoconocimiento, Gestión Emocional, Habilidades Sociales. Límite 10.
                 </small>
             </div>
             <div style={styles.inputGroup}>
@@ -338,8 +365,11 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 {data.modules.length < 6 && <button type="button" style={{...styles.button, ...styles.buttonSecondary, padding:'8px 16px'}} onClick={handleAddModule}><i className="fas fa-plus"></i> Añadir Módulo</button>}
             </div>
             
-            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '2rem'}}>
-                <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
+            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '2rem', gap: 12, flexWrap: 'wrap'}}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
+                  <button type="button" style={{...styles.button, backgroundColor: '#1f6feb'}} onClick={handleSaveAndExit}><i className="fas fa-save"></i> Guardar y salir</button>
+                </div>
                 <button type="submit" style={styles.button}>Guardar y Continuar <i className="fas fa-arrow-right"></i></button>
             </div>
         </form>
@@ -922,12 +952,17 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
       <div>
         {HeaderBar}
-        <div style={{ maxWidth: 520, margin: '20px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
-          <h2 style={{ marginTop: 0 }}>Bienvenido a AI Course Creator</h2>
-          <p>Accede o crea tu cuenta para continuar.</p>
+        <div style={{ maxWidth: 720, margin: '20px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
+          <h2 style={{ marginTop: 0 }}>Bienvenido a AnImiKoding by AnImiK</h2>
+          <p style={{ margin: '8px 0 16px 0' }}>
+            Bienestar Emocional a la velocidad de la IA. Crea automáticamente cursos por módulos con ayuda de la IA en nuestra aplicación y genera el código optimizado (.ts o .html) sin tener que programar, para que puedas lanzarlos sin límites ni demoras técnicas.
+          </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
             <button style={styles.button} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
             <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Iniciar sesión</button>
+          </div>
+          <div style={{ marginTop: 24 }}>
+            <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxWidth: 360, width: '100%', height: 'auto' }} />
           </div>
         </div>
       </div>

@@ -84,3 +84,6 @@ Para producción, tienes dos opciones:
 - La app está envuelta con `KindeProvider` y un `AuthGate` simple:
   - Antes de entrar, verás una pantalla con botones “Registrarse” e “Iniciar sesión”.
   - En el primer acceso tras registro, se abre un formulario para completar el perfil (nombre, apellido, empresa opcional, email, usuario y avatar). Se guarda en `localStorage` por usuario.
+- Logo de marca
+  - Coloca tu archivo `logo_animikoding.png` en la carpeta `public/` (ruta final de acceso: `/logo_animikoding.png`).
+  - Si lo pusiste en la raíz del repo, muévelo a `public/` para que Vite lo incluya en el build.
