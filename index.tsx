@@ -884,8 +884,14 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
   const storedProfile = (() => { try { return JSON.parse(localStorage.getItem(profileKey) || 'null'); } catch { return null; } })();
   const avatarUrl = storedProfile?.avatarDataUrl as string | undefined;
 
+  const displayName = (() => {
+    const p = storedProfile;
+    if (p?.firstName || p?.lastName) return `${p.firstName || ''} ${p.lastName || ''}`.trim();
+    return user?.given_name || user?.name || user?.email || '';
+  })();
+
   const HeaderBar = (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '8px 16px' }}>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
       {!isAuthenticated ? (
         <>
           <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Entrar</button>
@@ -893,6 +899,7 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
         </>
       ) : (
         <>
+          <span style={{ color: 'var(--text-color)', fontWeight: 500 }}>{displayName}</span>
           <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} type="button" onClick={() => {
             // cargar perfil para el editor
             const p = storedProfile || { firstName: user?.given_name || '', lastName: user?.family_name || '', company: '', email: user?.email || '', username: (user?.preferred_username || user?.email?.split('@')[0] || '').toLowerCase() };
