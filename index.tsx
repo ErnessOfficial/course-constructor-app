@@ -1155,6 +1155,12 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
       table { width: 100%; border-collapse: collapse; }
       table th, table td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
       table thead th { background: #f3f4f6; }
+      /* Quiz styles */
+      .quiz .question { margin: 10px 0; }
+      .quiz .question ul { list-style: none; padding-left: 0; }
+      .quiz .question li { padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 6px 0; cursor: pointer; background: #fff; }
+      .quiz .question li.selected { background: #e6ffed; border-color: #a7f3d0; }
+      .quiz .question .feedback { margin-top: 6px; color: #667c66; }
     </style>
   </head>
   <body>
@@ -1166,6 +1172,25 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
     </header>
     ${tocHtml}
     ${partsHtml}
+    <script>
+      // Simple quiz interaction: click an option to reveal its feedback
+      (function(){
+        document.addEventListener('click', function(e){
+          var el = e.target;
+          if (!el) return;
+          var li = el.closest ? el.closest('.quiz .question li') : null;
+          if (!li) return;
+          var question = li.closest ? li.closest('.quiz .question') : null;
+          if (!question) return;
+          var allLis = question.querySelectorAll('li');
+          for (var i=0;i<allLis.length;i++){ allLis[i].classList.remove('selected'); }
+          var allFb = question.querySelectorAll('.feedback');
+          for (var j=0;j<allFb.length;j++){ allFb[j].style.display = 'none'; }
+          var fb = li.querySelector('.feedback');
+          if (fb){ fb.style.display = 'block'; li.classList.add('selected'); }
+        });
+      })();
+    </script>
   </body>
 </html>`;
     }, [course]);
