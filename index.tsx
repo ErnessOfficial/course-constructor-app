@@ -214,7 +214,27 @@ const App: FC = () => {
             
             {view === 'create' && currentCourse && (
                 <>
-                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} />}
+                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveToList={(draft) => {
+                        // Normalize and assign id/cover before saving to list
+                        const slug = slugify(draft.title || 'curso');
+                        const normalized: Course = {
+                            ...draft,
+                            id: draft.id || slug || `curso-${Date.now()}`,
+                            coverImage: draft.coverImage || `${slug || 'curso'}_portada.png`,
+                        };
+                        setCurrentCourse(normalized);
+                        // Persist to list
+                        try {
+                          const raw = localStorage.getItem('coursesList');
+                          const list: Course[] = raw ? JSON.parse(raw) : [];
+                          const idx = list.findIndex(c => c.id === normalized.id);
+                          const next = idx >= 0 ? [...list.slice(0, idx), normalized, ...list.slice(idx + 1)] : [...list, normalized];
+                          localStorage.setItem('coursesList', JSON.stringify(next));
+                        } catch {}
+                        // Also keep the latest draft
+                        try { localStorage.setItem('draftCourse', JSON.stringify(normalized)); } catch {}
+                        alert('Curso guardado en la lista. Puedes continuar editando cuando quieras.');
+                    }} />}
                     {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} />}
                     {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
@@ -256,7 +276,7 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onLoadDraft: 
 
 import { useKindeAuth as useKindeAuthInForm } from '@kinde-oss/kinde-auth-react';
 
-const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void }> = ({ course, onSubmit, onCancel }) => {
+const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveToList: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveToList }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
     const { logout } = (useKindeAuthInForm() as any) || {};
@@ -458,9 +478,12 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
             </div>
             
             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '2rem', gap: 12, flexWrap: 'wrap'}}>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
                   <button type="button" style={{...styles.button, backgroundColor: '#1f6feb'}} onClick={handleSaveAndExit}><i className="fas fa-save"></i> Guardar y salir</button>
+                  <button type="button" style={{...styles.button, backgroundColor: 'var(--success-color)'}} onClick={() => { onSaveToList(data); setSaveToast('Curso guardado en la lista'); }}>
+                    <i className="fas fa-bookmark"></i> Guardar en lista
+                  </button>
                 </div>
                 <button type="submit" style={styles.button}>Guardar y Continuar <i className="fas fa-arrow-right"></i></button>
             </div>
