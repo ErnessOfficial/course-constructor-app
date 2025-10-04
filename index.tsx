@@ -713,19 +713,30 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
         setHtml(valueHTML || '<p>Escribe aquí tu contenido.</p>');
     }, [valueHTML]);
 
+    const focusEditor = () => {
+        if (editorRef.current) {
+            editorRef.current.focus();
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount === 0) {
+                const range = document.createRange();
+                range.selectNodeContents(editorRef.current);
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+    };
+
     const applyCmd = (cmd: string, val?: string) => {
-        // execCommand está deprecado pero sigue ampliamente soportado y sirve para nuestro caso simple
+        focusEditor();
         document.execCommand(cmd, false, val);
         syncHtml();
     };
 
-    const wrapSelection = (tag: 'mark') => {
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const range = sel.getRangeAt(0);
-        const el = document.createElement(tag);
-        el.setAttribute('style', 'background-color: #fff3a0;');
-        range.surroundContents(el);
+    const highlightSelection = () => {
+        focusEditor();
+        const ok = document.execCommand('hiliteColor', false, '#fff3a0');
+        if (!ok) document.execCommand('backColor', false, '#fff3a0');
         syncHtml();
     };
 
@@ -756,7 +767,7 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 <button type="button" title="Negrita" style={toolbarButtonStyle} onClick={() => applyCmd('bold')}><i className="fas fa-bold"></i></button>
                 <button type="button" title="Cursiva" style={toolbarButtonStyle} onClick={() => applyCmd('italic')}><i className="fas fa-italic"></i></button>
                 <button type="button" title="Subrayado" style={toolbarButtonStyle} onClick={() => applyCmd('underline')}><i className="fas fa-underline"></i></button>
-                <button type="button" title="Resaltado" style={toolbarButtonStyle} onClick={() => wrapSelection('mark')}><i className="fas fa-highlighter"></i></button>
+                <button type="button" title="Resaltado" style={toolbarButtonStyle} onClick={highlightSelection}><i className="fas fa-highlighter"></i></button>
                 <div style={{ width: 1, background: 'var(--border-color)' }} />
                 <button type="button" title="Nivel 1 - Título" style={toolbarButtonStyle} onClick={() => setBlock('H1')}>H1</button>
                 <button type="button" title="Nivel 2 - Subtítulo" style={toolbarButtonStyle} onClick={() => setBlock('H2')}>H2</button>
@@ -769,7 +780,7 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 suppressContentEditableWarning
                 onInput={syncHtml}
                 onBlur={syncHtml}
-                style={{ minHeight: 140, padding: 12, outline: 'none' }}
+                style={{ minHeight: 140, padding: 12, outline: 'none', direction: 'ltr', unicodeBidi: 'plaintext', textAlign: 'left', whiteSpace: 'pre-wrap' }}
                 dangerouslySetInnerHTML={{ __html: html }}
             />
         </div>
@@ -784,12 +795,22 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
     const [error, setError] = useState('');
 
     const predefinedPrompts = [
-        { name: "Quiz de 3 Preguntas", prompt: `Crea un quiz interactivo sobre el tema '{TOPIC}'. El quiz debe tener 3 preguntas de opción múltiple con 3 opciones cada una. Para cada opción, proporciona un feedback explicando por qué es correcta o incorrecta. Responde únicamente con un objeto JSON que siga esta estructura de TypeScript: \`interface QuizQuestion { question: string; options: { text: string; feedback: string; }[]; }[]\`. No incluyas backticks de markdown en tu respuesta.` },
-        { name: "Caso Práctico", prompt: "Genera un 'caso práctico' o 'estudio de caso' sobre '{TOPIC}'. Debe presentar una situación realista y terminar con 2 preguntas abiertas que inviten a la reflexión del participante. Responde con código HTML simple usando <p> y <strong>." },
-        { name: "Juego de Cartas (Conceptos)", prompt: "Crea un mini juego de cartas sobre '{TOPIC}'. Genera 4 pares de cartas (8 en total). Cada par debe tener un concepto y su definición. Responde con código HTML que use una <div> con la clase 'card-game' y dentro 8 <div> con la clase 'card'." },
-        { name: "Metáfora Explicativa", prompt: "Explica el concepto de '{TOPIC}' usando una metáfora o analogía poderosa y fácil de entender. Responde con código HTML usando un <blockquote>." },
-        { name: "Mito vs. Realidad", prompt: "Crea una tabla 'Mito vs. Realidad' sobre '{TOPIC}', con 3 mitos comunes y su correspondiente aclaración. Responde con una tabla HTML (<table>)." },
+        { name: "Quiz de 3 Preguntas", prompt: `Crea un quiz interactivo sobre el tema '{TOPIC}'. El quiz debe tener 3 preguntas de opción múltiple con 3 opciones cada una. Para cada opción, proporciona un feedback explicando por qué es correcta o incorrecta. Responde únicamente con un objeto JSON que siga esta estructura de TypeScript: \`interface QuizQuestion { question: string; options: { text: string; feedback: string; }[]; }[]\`. No incluyas backticks de markdown ni explicaciones: devuelve solo el JSON, sin texto adicional.` },
+        { name: "Caso Práctico", prompt: "Genera un 'caso práctico' o 'estudio de caso' sobre '{TOPIC}'. Debe presentar una situación realista y terminar con 2 preguntas abiertas que inviten a la reflexión del participante. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones), usando etiquetas básicas como <p>, <strong>, <ul>, <li>." },
+        { name: "Juego de Cartas (Conceptos)", prompt: "Crea un mini juego de cartas sobre '{TOPIC}'. Genera 4 pares de cartas (8 en total). Cada par debe tener un concepto y su definición. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones) que use una <div class='card-game'> con 8 <div class='card'> dentro." },
+        { name: "Metáfora Explicativa", prompt: "Explica el concepto de '{TOPIC}' usando una metáfora o analogía potente. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones) usando un <blockquote>." },
+        { name: "Mito vs. Realidad", prompt: "Crea una tabla 'Mito vs. Realidad' sobre '{TOPIC}', con 3 mitos comunes y su aclaración correspondiente. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones) usando <table>." },
     ];
+
+    const sanitizeGenerated = (text: string) => {
+        let t = (text || '').replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '').trim();
+        const firstLt = t.indexOf('<');
+        const lastGt = t.lastIndexOf('>');
+        if (firstLt !== -1 && lastGt !== -1 && lastGt > firstLt) {
+            t = t.slice(firstLt, lastGt + 1).trim();
+        }
+        return t;
+    };
 
     const handleGenerate = async (promptTemplate: string) => {
         if (!topic && !promptTemplate.includes('{TOPIC}')) {
@@ -802,7 +823,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
         setError('');
         setGeneratedContent('');
         try {
-            const finalPrompt = promptTemplate.replace('{TOPIC}', topic);
+            const finalPrompt = `${promptTemplate.replace('{TOPIC}', topic)}\n\nIMPORTANTE: Devuelve únicamente el código solicitado, sin explicaciones, sin prefijos ni sufijos, y sin usar backticks de markdown.`;
             const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
             const res = await fetch(`${API_BASE}/api/generate`, {
                 method: 'POST',
@@ -814,7 +835,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
                 throw new Error(msg || `HTTP ${res.status}`);
             }
             const data = await res.json();
-            setGeneratedContent(data.text || '');
+            setGeneratedContent(sanitizeGenerated(data.text || ''));
         } catch (e: any) {
             setError(`Error al contactar la IA: ${e.message}`);
         } finally {
@@ -827,7 +848,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
              setError("Por favor, escribe un prompt detallado.");
              return;
         }
-        handleGenerate(customPrompt);
+        handleGenerate(`${customPrompt}\n\nIMPORTANTE: Devuelve únicamente el código solicitado, sin explicaciones, sin prefijos ni sufijos, y sin usar backticks de markdown.`);
     }
     
     return (
@@ -862,7 +883,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
                             <div>
                                 <h4>Resultado Generado:</h4>
                                 <pre style={styles.generatedCode}><code>{generatedContent}</code></pre>
-                                <button style={{...styles.button, ...{backgroundColor: 'var(--success-color)'}, marginTop: '1rem'}} onClick={() => { onInsert(generatedContent); onClose(); }}>
+                                <button style={{...styles.button, ...{backgroundColor: 'var(--success-color)'}, marginTop: '1rem'}} onClick={() => { if (!generatedContent) { alert('No hay contenido para insertar.'); return; } onInsert(generatedContent); onClose(); }}>
                                     <i className="fas fa-check"></i> Insertar Recurso
                                 </button>
                             </div>
