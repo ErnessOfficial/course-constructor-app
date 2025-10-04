@@ -298,7 +298,7 @@ const App: FC = () => {
                         try { localStorage.setItem('draftCourse', JSON.stringify(normalized)); } catch {}
                         alert('Curso guardado en la lista. Puedes continuar editando cuando quieras.');
                     }} />}
-                    {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} />}
+                    {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} onBack={(data) => { setCurrentCourse(data); setStep(1); }} />}
                     {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
             )}
@@ -592,7 +592,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     );
 };
 
-const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = ({ course, onFinish }) => {
+const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onBack: (data: Course) => void }> = ({ course, onFinish, onBack }) => {
     const [currentCourse, setCurrentCourse] = useState(course);
     const [activeModuleIndex, setActiveModuleIndex] = useState(0);
     const [activePartIndex, setActivePartIndex] = useState(0);
@@ -708,7 +708,12 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
 
     return (
         <div style={styles.card}>
-            <h2 style={styles.h2}>{course.title} - Editor de Contenido</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <h2 style={styles.h2}>{course.title} - Editor de Contenido</h2>
+              <button type="button" style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} onClick={() => onBack(currentCourse)}>
+                <i className="fas fa-arrow-left"></i> Volver a ficha
+              </button>
+            </div>
             <div style={styles.tabs}>
                 {currentCourse.modules.map((mod, index) => (
                     <div key={mod.id} style={index === activeModuleIndex ? {...styles.tab, ...styles.activeTab} : styles.tab} onClick={() => setActiveModuleIndex(index)}>
@@ -1086,6 +1091,63 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
         return `import type { Course } from '../../types';\n\n// TODO: Asegúrate de importar tu instructor si es necesario\n// import { mockInstructor } from './courseData';\n\nexport const course: Course = ${courseObjectString};\n\nexport default course;`;
     }, [course]);
 
+    const htmlCode = useMemo(() => {
+        const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const renderResource = (act: any) => {
+            switch (act.type) {
+                case 'video': return `<video controls style="max-width:100%" src="${esc(`/videos/${sanitizeForPath(act.videoSrc)}`)}"></video>`;
+                case 'audio': return `<audio controls src="${esc(`/audios/${sanitizeForPath(act.audioSrc)}`)}"></audio>`;
+                case 'text': return (act.content || []).join('\n');
+                case 'quiz':
+                    try {
+                        const qs = act.questions || [];
+                        return `<div class="quiz">${qs.map((q: any) => `<div class="question"><p>${esc(q.question)}</p><ul>${(q.options||[]).map((op: any) => `<li>${esc(op.text)}<div class="feedback" style="display:none">${esc(op.feedback)}</div></li>`).join('')}</ul></div>`).join('')}</div>`;
+                    } catch { return '<!-- quiz -->'; }
+                case 'image': return `<img style="max-width:100%;height:auto;border-radius:8px" alt="${esc(act.title)}" src="${esc(`/images/${sanitizeForPath(act.imageSrc)}`)}" />`;
+                case 'iframe': return act.html || '';
+                default: return '';
+            }
+        };
+        const partsHtml = (course.modules || []).map((mod, mi) => `
+            <section class="module">
+              <h2>${esc(mod.title)}</h2>
+              ${(mod.parts || []).map((p, pi) => `
+                <article class="part">
+                  <h3>${esc(p.title)}</h3>
+                  ${(p.resources || []).map(renderResource).join('\n')}
+                </article>
+              `).join('\n')}
+            </section>
+        `).join('\n');
+        return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${esc(course.title)}</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 16px; }
+      h1 { color: #141313; }
+      h2 { border-bottom: 2px solid #8ab665; padding-bottom: 4px; }
+      .module { margin-bottom: 20px; }
+      .part { background: #e4fae8; border: 1px solid #cfe8d4; padding: 12px; border-radius: 8px; margin: 10px 0; }
+      blockquote { border-left: 4px solid #22b37b; padding: 8px 12px; background: #e4fae8; border-radius: 6px; }
+      table { width: 100%; border-collapse: collapse; }
+      table th, table td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+      table thead th { background: #f3f4f6; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>${esc(course.title)}</h1>
+      <h4>${esc(course.subtitle)}</h4>
+      <p>${esc(course.description)}</p>
+    </header>
+    ${partsHtml}
+  </body>
+</html>`;
+    }, [course]);
+
     const assets = useMemo(() => {
         const fileList = new Set<string>();
         fileList.add(`/images/${sanitizeForPath(course.coverImage)}`);
@@ -1120,7 +1182,20 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
             
             <h4>Código del Curso:</h4>
             <pre style={styles.generatedCode}><code>{generatedCode}</code></pre>
-            <button style={styles.button} onClick={handleDownload}><i className="fas fa-download"></i> Descargar Archivo .ts</button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button style={styles.button} onClick={handleDownload}><i className="fas fa-download"></i> Descargar Archivo .ts</button>
+              <button style={{ ...styles.button, backgroundColor: '#0ea5e9' }} onClick={() => {
+                const blob = new Blob([htmlCode], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${course.id}.html`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}><i className="fas fa-file-code"></i> Descargar Archivo .html</button>
+            </div>
             
             <h4 style={{marginTop: '2rem'}}>Lista de Archivos Requeridos:</h4>
             <p>Asegúrate de agregar los siguientes archivos en las carpetas `public/images`, `public/videos`, y `public/audios` de tu proyecto:</p>
