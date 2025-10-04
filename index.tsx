@@ -163,6 +163,8 @@ const App: FC = () => {
 
     const handleFinishEditing = (finalCourse: Course) => {
         setCurrentCourse(finalCourse);
+        saveCourseToList(finalCourse);
+        try { localStorage.setItem('draftCourse', JSON.stringify(finalCourse)); } catch {}
         setStep(3);
     };
 
@@ -520,11 +522,14 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
         setCurrentCourse(newCourse);
     };
 
+    const persist = (c: Course) => { try { localStorage.setItem('draftCourse', JSON.stringify(c)); } catch {} };
+
     const updateResource = (modIndex: number, partIndex: number, resIndex: number, updatedActivity: Activity) => {
         const newCourse = { ...currentCourse };
         ensureAtLeastOnePart(newCourse, modIndex);
         newCourse.modules[modIndex].parts[partIndex].resources[resIndex] = updatedActivity;
         setCurrentCourse(newCourse);
+        persist(newCourse);
     };
 
     const addActivity = (type: ActivityType, openAiModal: boolean = false) => {
@@ -547,6 +552,7 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
         };
         newCourse.modules[modIndex].parts[partIndex].resources.push(newActivity);
         setCurrentCourse(newCourse);
+        persist(newCourse);
 
         if (openAiModal) {
             setGeminiTarget({ modIndex, partIndex, resIndex: resources.length });
@@ -577,6 +583,11 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
         }
         setGeminiTarget(null);
     };
+
+    // Reset part index when switching module to avoid out-of-range
+    useEffect(() => {
+        setActivePartIndex(0);
+    }, [activeModuleIndex]);
 
     return (
         <div style={styles.card}>
@@ -1245,6 +1256,24 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(): { hasError: boolean } { return { hasError: true }; }
+  componentDidCatch(err: any) { console.error('UI error boundary caught:', err); }
+  render() {
+    if (this.state.hasError) {
+      return <div style={{ padding: 24 }}>
+        <h3>Ha ocurrido un error inesperado</h3>
+        <p>Hemos guardado tu progreso como borrador para evitar pérdidas. Recarga la página e intenta continuar.</p>
+      </div>;
+    }
+    return <>{this.props.children}</>;
+  }
+}
+
 const KindeWrappedApp: FC = () => {
   const domain = (import.meta as any).env?.VITE_KINDE_DOMAIN || 'https://animikrea.kinde.com';
   const clientId = (import.meta as any).env?.VITE_KINDE_CLIENT_ID || '499609149459408789fc958770cd4375';
@@ -1253,12 +1282,33 @@ const KindeWrappedApp: FC = () => {
 
   return (
     <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
-      <AuthGate>
-        <App />
-      </AuthGate>
+      <ErrorBoundary>
+        <AuthGate>
+          <App />
+        </AuthGate>
+      </ErrorBoundary>
     </KindeProvider>
   );
 };
 
+    // Load and persist courses list
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('coursesList');
+            if (raw) setCourses(JSON.parse(raw));
+        } catch {}
+    }, []);
+    useEffect(() => {
+        try { localStorage.setItem('coursesList', JSON.stringify(courses)); } catch {}
+    }, [courses]);
+
+    const saveCourseToList = (course: Course) => {
+        setCourses(prev => {
+            const idx = prev.findIndex(c => c.id === course.id);
+            const next = idx >= 0 ? [...prev.slice(0, idx), course, ...prev.slice(idx + 1)] : [...prev, course];
+            try { localStorage.setItem('coursesList', JSON.stringify(next)); } catch {}
+            return next;
+        });
+    };
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(<React.StrictMode><KindeWrappedApp /></React.StrictMode>);
