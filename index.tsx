@@ -213,6 +213,19 @@ const App: FC = () => {
                 onEditInfo={(course) => { setCurrentCourse(course); setStep(1); setView('create'); }}
                 onEditContent={(course) => { setCurrentCourse(course); setStep(2); setView('create'); }}
                 onViewCode={(course) => { setCurrentCourse(course); setStep(3); setView('create'); }}
+                onRegenerateCode={(course) => {
+                    const regenerated: Course = { ...course, updatedAt: new Date().toISOString() };
+                    setCurrentCourse(regenerated);
+                    try {
+                        const raw = localStorage.getItem('coursesList');
+                        const list: Course[] = raw ? JSON.parse(raw) : [];
+                        const idx = list.findIndex(c => c.id === regenerated.id);
+                        const next = idx >= 0 ? [...list.slice(0, idx), regenerated, ...list.slice(idx + 1)] : [...list, regenerated];
+                        localStorage.setItem('coursesList', JSON.stringify(next));
+                        setCourses(next);
+                    } catch {}
+                    setStep(3); setView('create');
+                }}
                 onFinalizeCourse={(course) => {
                     const completed: Course = { ...course, status: 'completed', updatedAt: new Date().toISOString() };
                     setCurrentCourse(completed);
@@ -286,9 +299,10 @@ const CourseList: FC<{
   onEditInfo: (c: Course) => void,
   onEditContent: (c: Course) => void,
   onViewCode: (c: Course) => void,
+  onRegenerateCode: (c: Course) => void,
   onFinalizeCourse: (c: Course) => void,
   onDeleteCourse: (c: Course) => void,
-}> = ({ courses, onCreateNew, onLoadDraft, onDeleteDraft, onEditInfo, onEditContent, onViewCode, onFinalizeCourse, onDeleteCourse }) => {
+}> = ({ courses, onCreateNew, onLoadDraft, onDeleteDraft, onEditInfo, onEditContent, onViewCode, onRegenerateCode, onFinalizeCourse, onDeleteCourse }) => {
     const hasDraft = typeof window !== 'undefined' && !!localStorage.getItem('draftCourse');
     return (
       <div style={styles.card}>
@@ -309,6 +323,7 @@ const CourseList: FC<{
                         <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '6px 10px' }} onClick={() => onEditInfo(c)} title="Editar ficha" type="button"><i className="fas fa-edit"></i> Ficha</button>
                         <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '6px 10px' }} onClick={() => onEditContent(c)} title="Editar contenido" type="button"><i className="fas fa-layer-group"></i> Contenido</button>
                         <button style={{ ...styles.button, padding: '6px 10px' }} onClick={() => onViewCode(c)} title="Ver código" type="button"><i className="fas fa-eye"></i> Ver código</button>
+                        <button style={{ ...styles.button, padding: '6px 10px', backgroundColor: '#0ea5e9' }} onClick={() => onRegenerateCode(c)} title="Regenerar código" type="button"><i className="fas fa-sync"></i> Regenerar</button>
                         <button style={{ ...styles.button, backgroundColor: 'var(--success-color)', padding: '6px 10px' }} onClick={() => onFinalizeCourse(c)} title="Finalizar" type="button"><i className="fas fa-check"></i> Finalizar</button>
                         <button style={{ ...styles.button, ...styles.buttonDanger, padding: '6px 10px' }} onClick={() => onDeleteCourse(c)} title="Eliminar" type="button"><i className="fas fa-trash"></i></button>
                       </div>
