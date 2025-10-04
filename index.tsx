@@ -149,6 +149,16 @@ const App: FC = () => {
         setCurrentCourse(null);
     };
 
+    const handleBack = () => {
+        if (view === 'create') {
+            if (step > 1) {
+                setStep(step - 1);
+            } else {
+                handleBackToList();
+            }
+        }
+    };
+
     const handleFormSubmit = (courseData: Course) => {
         const slug = slugify(courseData.title);
         const finalCourseData: Course = {
@@ -171,6 +181,13 @@ const App: FC = () => {
     return (
         <div style={styles.appContainer}>
             <header style={styles.header}>
+                {view !== 'list' && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8 }}>
+                    <button type="button" onClick={handleBack} style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }}>
+                      <i className="fas fa-arrow-left"></i> Volver
+                    </button>
+                  </div>
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                     <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxHeight: 56, height: '56px', width: 'auto' }} />
                     <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
