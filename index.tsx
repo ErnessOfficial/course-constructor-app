@@ -279,6 +279,40 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
         newObjectives[index] = value;
         setData(prev => ({...prev, learningObjectives: newObjectives }));
     };
+
+    const [aiGeneratingIndex, setAiGeneratingIndex] = useState<number | null>(null);
+    const handleAiGenerateObjective = async (i: number) => {
+        const title = data.modules[i]?.title?.trim();
+        if (!title) {
+            alert('Por favor, escribe primero el nombre del módulo.');
+            return;
+        }
+        setAiGeneratingIndex(i);
+        try {
+            const prompt = `Crea un objetivo de aprendizaje conciso y claro (1 sola oración) para un módulo de un curso interactivo orientado al bienestar emocional. Basa el objetivo exclusivamente en el título del módulo entre comillas y no incluyas viñetas, prefijos ni texto adicional. Título del módulo: "${title}". Devuelve solo la oración en español.`;
+            const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+            const res = await fetch(`${API_BASE}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt })
+            });
+            if (!res.ok) {
+                const msg = await res.text().catch(() => '');
+                throw new Error(msg || `HTTP ${res.status}`);
+            }
+            const dataJson = await res.json();
+            const text: string = (dataJson?.text || '').trim();
+            if (text) {
+                handleObjectiveChange(i, text);
+            } else {
+                alert('La IA no devolvió un objetivo. Intenta de nuevo.');
+            }
+        } catch (e: any) {
+            alert(`Error generando objetivo con IA: ${e?.message || e}`);
+        } finally {
+            setAiGeneratingIndex(null);
+        }
+    };
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -356,10 +390,17 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
             </div>
             <div style={styles.inputGroup}>
                 <label style={styles.label}>Módulos y Objetivos de Aprendizaje</label>
+                <small style={{ color: 'var(--muted-color)', display: 'block', marginBottom: 8 }}>
+                    ¿Quieres ayuda para redactar los objetivos? Haz clic en el botón a la derecha de cada objetivo para que la IA lo proponga automáticamente.
+                </small>
                 {data.modules.map((mod, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
                         <input style={styles.input} value={mod.title} onChange={e => handleModuleChange(i, e.target.value)} placeholder={`Nombre del Módulo ${i + 1}`} />
                         <input style={styles.input} value={data.learningObjectives[i]} onChange={e => handleObjectiveChange(i, e.target.value)} placeholder={`Objetivo de aprendizaje para el Módulo ${i+1}`} />
+                        <button type="button" title="Objetivo con IA" onClick={() => handleAiGenerateObjective(i)} disabled={aiGeneratingIndex === i}
+                          style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--surface-color)', cursor: 'pointer' }}>
+                            {aiGeneratingIndex === i ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-magic"></i>}
+                        </button>
                     </div>
                 ))}
                 {data.modules.length < 6 && <button type="button" style={{...styles.button, ...styles.buttonSecondary, padding:'8px 16px'}} onClick={handleAddModule}><i className="fas fa-plus"></i> Añadir Módulo</button>}
