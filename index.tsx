@@ -258,7 +258,15 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
     const { logout } = (useKindeAuthInForm() as any) || {};
-    const saveDraft = (d: Course) => { try { localStorage.setItem('draftCourse', JSON.stringify(d)); } catch {} };
+    const [saveToast, setSaveToast] = useState<string | null>(null);
+    const saveDraft = (d: Course) => {
+        try {
+            localStorage.setItem('draftCourse', JSON.stringify(d));
+            setSaveToast('Borrador guardado');
+            window.clearTimeout((saveDraft as any)._t);
+            (saveDraft as any)._t = window.setTimeout(() => setSaveToast(null), 1800);
+        } catch {}
+    };
     
     const validTags: Record<string, BroadCategory> = {
       'autoconocimiento': 'Autoconocimiento',
@@ -454,6 +462,12 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 <button type="submit" style={styles.button}>Guardar y Continuar <i className="fas fa-arrow-right"></i></button>
             </div>
         </form>
+        {saveToast && (
+            <div style={{ position: 'fixed', right: 20, bottom: 20, background: 'var(--surface-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '10px 14px', boxShadow: 'var(--shadow-md)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="fas fa-check-circle" style={{ color: 'var(--success-color)' }}></i>
+                <span>{saveToast}</span>
+            </div>
+        )}
     );
 };
 
