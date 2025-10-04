@@ -390,6 +390,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     ];
 
     return (
+        <>
         <form onSubmit={handleSubmit} style={styles.card}>
             <h2 style={styles.h2}>Ficha del Curso</h2>
             <div style={styles.inputGroup}>
@@ -468,6 +469,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 <span>{saveToast}</span>
             </div>
         )}
+        </>
     );
 };
 
