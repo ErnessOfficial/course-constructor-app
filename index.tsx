@@ -225,6 +225,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
     const { logout } = (useKindeAuthInForm() as any) || {};
+    const saveDraft = (d: Course) => { try { localStorage.setItem('draftCourse', JSON.stringify(d)); } catch {} };
     
     const validTags: Record<string, BroadCategory> = {
       'autoconocimiento': 'Autoconocimiento',
@@ -238,7 +239,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     };
 
     const handleCategorySelect = (categoryName: string) => {
-        setData(prev => ({ ...prev, category: categoryName }));
+        setData(prev => { const next = { ...prev, category: categoryName }; saveDraft(next); return next; });
     };
     
     const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -248,36 +249,44 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
             const newTag = validTags[cleanInput];
             
             if (newTag && !data.broadCategories.includes(newTag)) {
-                setData(prev => ({...prev, broadCategories: [...prev.broadCategories, newTag]}));
+                setData(prev => { const next = {...prev, broadCategories: [...prev.broadCategories, newTag]}; saveDraft(next); return next; });
             }
             setTagInput('');
         }
     };
 
     const removeTag = (tagToRemove: BroadCategory) => {
-        setData(prev => ({ ...prev, broadCategories: prev.broadCategories.filter(tag => tag !== tagToRemove)}));
+        setData(prev => { const next = { ...prev, broadCategories: prev.broadCategories.filter(tag => tag !== tagToRemove) }; saveDraft(next); return next; });
     };
     
     const handleAddModule = () => {
         if (data.modules.length < 6) {
-            setData(prev => ({
-                ...prev,
-                modules: [...prev.modules, { id: '', title: `Módulo ${prev.modules.length + 1}`, parts: [] }],
-                learningObjectives: [...prev.learningObjectives, `Objetivo del módulo ${prev.modules.length + 1}`]
-            }));
+            setData(prev => {
+                const next = {
+                    ...prev,
+                    modules: [...prev.modules, { id: '', title: `Módulo ${prev.modules.length + 1}`, parts: [] }],
+                    learningObjectives: [...prev.learningObjectives, `Objetivo del módulo ${prev.modules.length + 1}`]
+                } as Course;
+                saveDraft(next);
+                return next;
+            });
         }
     };
 
     const handleModuleChange = (index: number, value: string) => {
         const newModules = [...data.modules];
         newModules[index].title = value;
-        setData(prev => ({ ...prev, modules: newModules }));
+        const next = { ...data, modules: newModules } as Course;
+        setData(next);
+        saveDraft(next);
     };
 
     const handleObjectiveChange = (index: number, value: string) => {
         const newObjectives = [...data.learningObjectives];
         newObjectives[index] = value;
-        setData(prev => ({...prev, learningObjectives: newObjectives }));
+        const next = { ...data, learningObjectives: newObjectives } as Course;
+        setData(next);
+        saveDraft(next);
     };
 
     const [aiGeneratingIndex, setAiGeneratingIndex] = useState<number | null>(null);
@@ -321,9 +330,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     };
 
     const handleSaveAndExit = () => {
-        try {
-            localStorage.setItem('draftCourse', JSON.stringify(data));
-        } catch {}
+        saveDraft(data);
         if (typeof window !== 'undefined') alert('Ficha guardada localmente. Puedes retomar más tarde desde Crear Nuevo Curso.');
         logout?.();
     };
