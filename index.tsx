@@ -18,7 +18,7 @@ interface IFrameActivity extends BaseActivity { type: 'iframe'; html: string; }
 type Activity = TextActivity | VideoActivity | AudioActivity | QuizActivity | IFrameActivity | ImageActivity;
 interface ModulePart { id: string; title: string; resources: Activity[]; }
 interface Module { id: string; title: string; parts: ModulePart[]; }
-interface Course { id: string; title: string; subtitle: string; description: string; category: string; broadCategories: BroadCategory[]; coverImage: string; instructor: Instructor; learningObjectives: string[]; modules: Module[]; }
+interface Course { id: string; title: string; subtitle: string; description: string; category: string; broadCategories: BroadCategory[]; coverImage: string; instructor: Instructor; learningObjectives: string[]; modules: Module[]; status?: 'draft' | 'completed'; updatedAt?: string; }
 
 // --- STYLES OBJECT ---
 const styles: { [key: string]: React.CSSProperties } = {
@@ -221,6 +221,8 @@ const App: FC = () => {
                             ...draft,
                             id: draft.id || slug || `curso-${Date.now()}`,
                             coverImage: draft.coverImage || `${slug || 'curso'}_portada.png`,
+                            status: 'draft',
+                            updatedAt: new Date().toISOString(),
                         };
                         setCurrentCourse(normalized);
                         // Persist to list
@@ -253,7 +255,15 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onLoadDraft: 
           {courses.length === 0 ? (
               <p>Aún no has creado ningún curso.</p>
           ) : (
-              <ul>{courses.map(c => <li key={c.id}>{c.title}</li>)}</ul>
+              <ul>
+                {courses.map(c => (
+                  <li key={c.id} style={{ marginBottom: 6 }}>
+                    <strong>{c.title || '(Sin título)'}</strong>
+                    {c.status && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 12, background: c.status === 'completed' ? '#e6ffed' : '#f3f4f6', color: c.status === 'completed' ? '#057a55' : '#374151', fontSize: 12 }}>{c.status === 'completed' ? 'Completado' : 'Borrador'}</span>}
+                    {c.updatedAt && <span style={{ marginLeft: 8, color: 'var(--muted-color)', fontSize: 12 }}>Actualizado: {new Date(c.updatedAt).toLocaleString()}</span>}
+                  </li>
+                ))}
+              </ul>
           )}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button style={styles.button} onClick={onCreateNew}>
