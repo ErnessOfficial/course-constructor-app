@@ -190,7 +190,25 @@ const App: FC = () => {
                 )}
             </header>
             
-            {view === 'list' && <CourseList courses={courses} onCreateNew={handleCreateNew} />}
+            {view === 'list' && <CourseList
+                courses={courses}
+                onCreateNew={handleCreateNew}
+                onLoadDraft={() => {
+                    try {
+                        const raw = localStorage.getItem('draftCourse');
+                        if (!raw) { alert('No hay borrador guardado.'); return; }
+                        const parsed = JSON.parse(raw);
+                        setCurrentCourse(parsed);
+                        setStep(1);
+                        setView('create');
+                    } catch {
+                        alert('No se pudo cargar el borrador.');
+                    }
+                }}
+                onDeleteDraft={() => {
+                    try { localStorage.removeItem('draftCourse'); alert('Borrador eliminado.'); } catch {}
+                }}
+            />}
             
             {view === 'create' && currentCourse && (
                 <>
@@ -205,19 +223,34 @@ const App: FC = () => {
 
 // --- SUB-COMPONENTS ---
 
-const CourseList: FC<{ courses: Course[], onCreateNew: () => void }> = ({ courses, onCreateNew }) => (
-    <div style={styles.card}>
-        <h2 style={styles.h2}>Mis Cursos</h2>
-        {courses.length === 0 ? (
-            <p>Aún no has creado ningún curso.</p>
-        ) : (
-            <ul>{courses.map(c => <li key={c.id}>{c.title}</li>)}</ul>
-        )}
-        <button style={styles.button} onClick={onCreateNew}>
-            <i className="fas fa-plus"></i> Crear Nuevo Curso
-        </button>
-    </div>
-);
+const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onLoadDraft: () => void, onDeleteDraft: () => void }> = ({ courses, onCreateNew, onLoadDraft, onDeleteDraft }) => {
+    const hasDraft = typeof window !== 'undefined' && !!localStorage.getItem('draftCourse');
+    return (
+      <div style={styles.card}>
+          <h2 style={styles.h2}>Mis Cursos</h2>
+          {courses.length === 0 ? (
+              <p>Aún no has creado ningún curso.</p>
+          ) : (
+              <ul>{courses.map(c => <li key={c.id}>{c.title}</li>)}</ul>
+          )}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button style={styles.button} onClick={onCreateNew}>
+                <i className="fas fa-plus"></i> Crear Nuevo Curso
+            </button>
+            {hasDraft && (
+              <>
+                <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={onLoadDraft}>
+                    <i className="fas fa-folder-open"></i> Cargar borrador
+                </button>
+                <button style={{ ...styles.button, ...styles.buttonDanger }} onClick={onDeleteDraft}>
+                    <i className="fas fa-trash"></i> Eliminar borrador
+                </button>
+              </>
+            )}
+          </div>
+      </div>
+    );
+};
 
 import { useKindeAuth as useKindeAuthInForm } from '@kinde-oss/kinde-auth-react';
 
