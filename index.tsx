@@ -793,6 +793,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
     const [isLoading, setIsLoading] = useState(false);
     const [generatedContent, setGeneratedContent] = useState('');
     const [error, setError] = useState('');
+    const [showPreview, setShowPreview] = useState(false);
 
     const predefinedPrompts = [
         { name: "Quiz de 3 Preguntas", prompt: `Crea un quiz interactivo sobre el tema '{TOPIC}'. El quiz debe tener 3 preguntas de opción múltiple con 3 opciones cada una. Para cada opción, proporciona un feedback explicando por qué es correcta o incorrecta. Responde únicamente con un objeto JSON que siga esta estructura de TypeScript: \`interface QuizQuestion { question: string; options: { text: string; feedback: string; }[]; }[]\`. No incluyas backticks de markdown ni explicaciones: devuelve solo el JSON, sin texto adicional.` },
@@ -850,6 +851,15 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
         }
         handleGenerate(`${customPrompt}\n\nIMPORTANTE: Devuelve únicamente el código solicitado, sin explicaciones, sin prefijos ni sufijos, y sin usar backticks de markdown.`);
     }
+
+    const sanitizeForPreview = (html: string) => {
+        let t = html || '';
+        // eliminar scripts y handlers inline
+        t = t.replace(/<script[\s\S]*?<\/script>/gi, '');
+        t = t.replace(/on[a-zA-Z]+\s*=\s*"[^"]*"/gi, '');
+        t = t.replace(/on[a-zA-Z]+\s*=\s*'[^']*'/gi, '');
+        return t;
+    };
     
     return (
         <div style={styles.modalOverlay} onClick={onClose}>
@@ -883,9 +893,25 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
                             <div>
                                 <h4>Resultado Generado:</h4>
                                 <pre style={styles.generatedCode}><code>{generatedContent}</code></pre>
-                                <button style={{...styles.button, ...{backgroundColor: 'var(--success-color)'}, marginTop: '1rem'}} onClick={() => { if (!generatedContent) { alert('No hay contenido para insertar.'); return; } onInsert(generatedContent); onClose(); }}>
+                                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: '10px' }}>
+                                  <button style={{...styles.button, ...styles.buttonSecondary}} onClick={() => setShowPreview(v => !v)} type="button">
+                                    {showPreview ? 'Ocultar previsualización' : 'Previsualizar'}
+                                  </button>
+                                  <button style={{...styles.button, ...styles.buttonDanger}} onClick={() => setGeneratedContent('')} type="button">
+                                    Limpiar
+                                  </button>
+                                  <button style={{...styles.button, ...{backgroundColor: 'var(--success-color)'}}} onClick={() => { if (!generatedContent) { alert('No hay contenido para insertar.'); return; } onInsert(generatedContent); onClose(); }} type="button">
                                     <i className="fas fa-check"></i> Insertar Recurso
-                                </button>
+                                  </button>
+                                </div>
+                                {showPreview && (
+                                  <div style={{ marginTop: 12, border: '1px solid var(--border-color)', borderRadius: 8, padding: 12, background: '#fafafa' }}>
+                                    <h5 style={{ margin: '4px 0 10px 0' }}>Vista previa</h5>
+                                    {/^\s*</.test(generatedContent)
+                                      ? <div dangerouslySetInnerHTML={{ __html: sanitizeForPreview(generatedContent) }} />
+                                      : <pre style={{ whiteSpace: 'pre-wrap' }}>{generatedContent}</pre>}
+                                  </div>
+                                )}
                             </div>
                         )}
                     </div>
