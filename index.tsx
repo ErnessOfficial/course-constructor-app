@@ -210,6 +210,37 @@ const App: FC = () => {
                 onDeleteDraft={() => {
                     try { localStorage.removeItem('draftCourse'); alert('Borrador eliminado.'); } catch {}
                 }}
+                onEditInfo={(course) => { setCurrentCourse(course); setStep(1); setView('create'); }}
+                onEditContent={(course) => { setCurrentCourse(course); setStep(2); setView('create'); }}
+                onViewCode={(course) => { setCurrentCourse(course); setStep(3); setView('create'); }}
+                onFinalizeCourse={(course) => {
+                    const completed: Course = { ...course, status: 'completed', updatedAt: new Date().toISOString() };
+                    setCurrentCourse(completed);
+                    // persist
+                    try {
+                        const raw = localStorage.getItem('coursesList');
+                        const list: Course[] = raw ? JSON.parse(raw) : [];
+                        const idx = list.findIndex(c => c.id === completed.id);
+                        const next = idx >= 0 ? [...list.slice(0, idx), completed, ...list.slice(idx + 1)] : [...list, completed];
+                        localStorage.setItem('coursesList', JSON.stringify(next));
+                    } catch {}
+                    setStep(3); setView('create');
+                }}
+                onDeleteCourse={(course) => {
+                    if (!confirm(`¿Eliminar el curso "${course.title || course.id}" de la lista?`)) return;
+                    try {
+                        const raw = localStorage.getItem('coursesList');
+                        const list: Course[] = raw ? JSON.parse(raw) : [];
+                        const next = list.filter(c => c.id !== course.id);
+                        localStorage.setItem('coursesList', JSON.stringify(next));
+                        setCourses(next);
+                        const draft = localStorage.getItem('draftCourse');
+                        if (draft) {
+                          const d = JSON.parse(draft);
+                          if (d?.id === course.id) localStorage.removeItem('draftCourse');
+                        }
+                    } catch {}
+                }}
             />}
             
             {view === 'create' && currentCourse && (
@@ -247,7 +278,17 @@ const App: FC = () => {
 
 // --- SUB-COMPONENTS ---
 
-const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onLoadDraft: () => void, onDeleteDraft: () => void }> = ({ courses, onCreateNew, onLoadDraft, onDeleteDraft }) => {
+const CourseList: FC<{
+  courses: Course[],
+  onCreateNew: () => void,
+  onLoadDraft: () => void,
+  onDeleteDraft: () => void,
+  onEditInfo: (c: Course) => void,
+  onEditContent: (c: Course) => void,
+  onViewCode: (c: Course) => void,
+  onFinalizeCourse: (c: Course) => void,
+  onDeleteCourse: (c: Course) => void,
+}> = ({ courses, onCreateNew, onLoadDraft, onDeleteDraft, onEditInfo, onEditContent, onViewCode, onFinalizeCourse, onDeleteCourse }) => {
     const hasDraft = typeof window !== 'undefined' && !!localStorage.getItem('draftCourse');
     return (
       <div style={styles.card}>
@@ -255,12 +296,23 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onLoadDraft: 
           {courses.length === 0 ? (
               <p>Aún no has creado ningún curso.</p>
           ) : (
-              <ul>
+              <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
                 {courses.map(c => (
-                  <li key={c.id} style={{ marginBottom: 6 }}>
-                    <strong>{c.title || '(Sin título)'}</strong>
-                    {c.status && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 12, background: c.status === 'completed' ? '#e6ffed' : '#f3f4f6', color: c.status === 'completed' ? '#057a55' : '#374151', fontSize: 12 }}>{c.status === 'completed' ? 'Completado' : 'Borrador'}</span>}
-                    {c.updatedAt && <span style={{ marginLeft: 8, color: 'var(--muted-color)', fontSize: 12 }}>Actualizado: {new Date(c.updatedAt).toLocaleString()}</span>}
+                  <li key={c.id} style={{ marginBottom: 10, border: '1px solid var(--border-color)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div>
+                        <strong>{c.title || '(Sin título)'}</strong>
+                        {c.status && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 12, background: c.status === 'completed' ? '#e6ffed' : '#f3f4f6', color: c.status === 'completed' ? '#057a55' : '#374151', fontSize: 12 }}>{c.status === 'completed' ? 'Completado' : 'Borrador'}</span>}
+                        {c.updatedAt && <span style={{ marginLeft: 8, color: 'var(--muted-color)', fontSize: 12 }}>Actualizado: {new Date(c.updatedAt).toLocaleString()}</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '6px 10px' }} onClick={() => onEditInfo(c)} title="Editar ficha" type="button"><i className="fas fa-edit"></i> Ficha</button>
+                        <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '6px 10px' }} onClick={() => onEditContent(c)} title="Editar contenido" type="button"><i className="fas fa-layer-group"></i> Contenido</button>
+                        <button style={{ ...styles.button, padding: '6px 10px' }} onClick={() => onViewCode(c)} title="Ver código" type="button"><i className="fas fa-eye"></i> Ver código</button>
+                        <button style={{ ...styles.button, backgroundColor: 'var(--success-color)', padding: '6px 10px' }} onClick={() => onFinalizeCourse(c)} title="Finalizar" type="button"><i className="fas fa-check"></i> Finalizar</button>
+                        <button style={{ ...styles.button, ...styles.buttonDanger, padding: '6px 10px' }} onClick={() => onDeleteCourse(c)} title="Eliminar" type="button"><i className="fas fa-trash"></i></button>
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
