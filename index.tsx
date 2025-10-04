@@ -1108,17 +1108,34 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
                 default: return '';
             }
         };
-        const partsHtml = (course.modules || []).map((mod, mi) => `
-            <section class="module">
-              <h2>${esc(mod.title)}</h2>
-              ${(mod.parts || []).map((p, pi) => `
-                <article class="part">
+        const partsHtml = (course.modules || []).map((mod, mi) => {
+            const modSlug = slugify(mod.title || `mod-${mi+1}`);
+            const parts = (mod.parts || []).map((p, pi) => {
+                const partSlug = slugify(p.title || `parte-${pi+1}`);
+                return `
+                <article class="part" id="part-${modSlug}-${partSlug}">
                   <h3>${esc(p.title)}</h3>
                   ${(p.resources || []).map(renderResource).join('\n')}
-                </article>
-              `).join('\n')}
-            </section>
-        `).join('\n');
+                </article>`;
+            }).join('\n');
+            return `
+            <section class="module" id="mod-${modSlug}">
+              <h2>${esc(mod.title)}</h2>
+              ${parts}
+            </section>`;
+        }).join('\n');
+
+        const tocHtml = (() => {
+            const mods = (course.modules || []).map((mod, mi) => {
+                const modSlug = slugify(mod.title || `mod-${mi+1}`);
+                const parts = (mod.parts || []).map((p, pi) => {
+                    const partSlug = slugify(p.title || `parte-${pi+1}`);
+                    return `<li><a href="#part-${modSlug}-${partSlug}">${esc(p.title)}</a></li>`;
+                }).join('');
+                return `<li><a href="#mod-${modSlug}">${esc(mod.title)}</a>${parts ? `<ul>${parts}</ul>` : ''}</li>`;
+            }).join('');
+            return `<nav class="toc"><h3>Contenido</h3><ul>${mods}</ul></nav>`;
+        })();
         return `<!doctype html>
 <html lang="es">
   <head>
@@ -1131,6 +1148,9 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
       h2 { border-bottom: 2px solid #8ab665; padding-bottom: 4px; }
       .module { margin-bottom: 20px; }
       .part { background: #e4fae8; border: 1px solid #cfe8d4; padding: 12px; border-radius: 8px; margin: 10px 0; }
+      .cover { max-width: 720px; width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+      .toc { background: #f5f7f5; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 14px 0; }
+      .toc ul { margin: 6px 0 0 16px; }
       blockquote { border-left: 4px solid #22b37b; padding: 8px 12px; background: #e4fae8; border-radius: 6px; }
       table { width: 100%; border-collapse: collapse; }
       table th, table td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
@@ -1142,7 +1162,9 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
       <h1>${esc(course.title)}</h1>
       <h4>${esc(course.subtitle)}</h4>
       <p>${esc(course.description)}</p>
+      ${course.coverImage ? `<img class="cover" src="${esc(`/images/${sanitizeForPath(course.coverImage)}`)}" alt="${esc(course.title)}" />` : ''}
     </header>
+    ${tocHtml}
     ${partsHtml}
   </body>
 </html>`;
