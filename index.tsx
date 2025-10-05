@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useMemo, FC, useEffect, createContext, useContext } from 'react';
+import React, { useState, useCallback, useMemo, FC, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 // Gemini calls are proxied via our backend at /api/generate
-// Kinde auth is dynamically imported to avoid runtime crashes if SDK mismatches
+import { KindeProvider, useKindeAuth } from '@kinde-oss/kinde-auth-react';
 
 // --- TYPE DEFINITIONS (as per project structure) ---
 type BroadCategory = 'Autoconocimiento' | 'Gestión Emocional' | 'Habilidades Sociales';
@@ -1264,12 +1264,8 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToE
 // --- AUTH GATE & SETUP ---
 interface ProfileData { firstName: string; lastName: string; company?: string; email: string; username: string; avatarDataUrl?: string; }
 
-type AuthState = { isAuthenticated: boolean; isLoading: boolean; user?: any; login: () => void; register: () => void; logout: () => void };
-const AuthContext = createContext<AuthState>({ isAuthenticated: false, isLoading: false, login: () => {}, register: () => {}, logout: () => {} });
-const useAuth = () => useContext(AuthContext);
-
 const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, user, login, register, logout } = useAuth();
+  const { isAuthenticated, isLoading, user, login, register, logout } = useKindeAuth() as any;
   const [needsProfile, setNeedsProfile] = useState(false);
   const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
   const [showProfileEditor, setShowProfileEditor] = useState(false);
@@ -1528,71 +1524,13 @@ const KindeWrappedApp: FC = () => {
   const logoutUri = (import.meta as any).env?.VITE_KINDE_LOGOUT_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
   return (
-    <DynamicKindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
+    <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
       <ErrorBoundary>
         <AuthGate>
           <App />
         </AuthGate>
       </ErrorBoundary>
-    </DynamicKindeProvider>
-  );
-};
-
-const DynamicKindeProvider: FC<{ domain: string; clientId: string; redirectUri: string; logoutUri: string; children: React.ReactNode }> = ({ domain, clientId, redirectUri, logoutUri, children }) => {
-  const [mod, setMod] = useState<any | null>(null);
-  const [sdkError, setSdkError] = useState<boolean>(false);
-  const [attempts, setAttempts] = useState<number>(0);
-  useEffect(() => {
-    let mounted = true;
-    let timer: any;
-    (async () => {
-      try {
-        const m = await import('@kinde-oss/kinde-auth-react');
-        if (mounted) { setMod(m); setSdkError(false); }
-      } catch (e) {
-        console.error('Kinde SDK failed to load, continuing without auth SDK:', e);
-        if (mounted) { setMod(null); setSdkError(true); }
-        if (attempts < 3 && mounted) {
-          timer = setTimeout(() => setAttempts(a => a + 1), 5000);
-        }
-      }
-    })();
-    return () => { mounted = false; if (timer) clearTimeout(timer); };
-  }, [attempts]);
-
-  if (mod && mod.KindeProvider) {
-    const KindeProvider = mod.KindeProvider;
-    const KindeConsumer: FC<{ children: React.ReactNode }> = ({ children }) => {
-      const state = mod.useKindeAuth ? (mod.useKindeAuth() as any) : { isAuthenticated: false, isLoading: false, user: undefined, login: () => {}, register: () => {}, logout: () => {} };
-      const value: AuthState = {
-        isAuthenticated: !!state?.isAuthenticated,
-        isLoading: !!state?.isLoading,
-        user: state?.user,
-        login: state?.login || (() => {}),
-        register: state?.register || (() => {}),
-        logout: state?.logout || (() => {}),
-      };
-      return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-    };
-    return (
-      <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
-        <KindeConsumer>{children}</KindeConsumer>
-      </KindeProvider>
-    );
-  }
-
-  // Fallback without SDK: unauthenticated state but UI loads
-  const fallback: AuthState = { isAuthenticated: false, isLoading: false, user: undefined, login: () => {}, register: () => {}, logout: () => {} };
-  return (
-    <>
-      {sdkError && (
-        <div style={{ position: 'fixed', top: 8, right: 8, background: '#fff8e1', color: '#7a5d00', border: '1px solid #f1d48a', padding: '8px 12px', borderRadius: 8, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 2000 }}>
-          Autenticación temporalmente no disponible.
-          <button onClick={() => setAttempts(a => a + 1)} style={{ marginLeft: 8, background: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>Reintentar</button>
-        </div>
-      )}
-      <AuthContext.Provider value={fallback}>{children}</AuthContext.Provider>
-    </>
+    </KindeProvider>
   );
 };
 
