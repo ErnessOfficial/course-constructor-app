@@ -1540,19 +1540,25 @@ const KindeWrappedApp: FC = () => {
 
 const DynamicKindeProvider: FC<{ domain: string; clientId: string; redirectUri: string; logoutUri: string; children: React.ReactNode }> = ({ domain, clientId, redirectUri, logoutUri, children }) => {
   const [mod, setMod] = useState<any | null>(null);
+  const [sdkError, setSdkError] = useState<boolean>(false);
+  const [attempts, setAttempts] = useState<number>(0);
   useEffect(() => {
     let mounted = true;
+    let timer: any;
     (async () => {
       try {
         const m = await import('@kinde-oss/kinde-auth-react');
-        if (mounted) setMod(m);
+        if (mounted) { setMod(m); setSdkError(false); }
       } catch (e) {
         console.error('Kinde SDK failed to load, continuing without auth SDK:', e);
-        if (mounted) setMod(null);
+        if (mounted) { setMod(null); setSdkError(true); }
+        if (attempts < 3 && mounted) {
+          timer = setTimeout(() => setAttempts(a => a + 1), 5000);
+        }
       }
     })();
-    return () => { mounted = false; };
-  }, []);
+    return () => { mounted = false; if (timer) clearTimeout(timer); };
+  }, [attempts]);
 
   if (mod && mod.KindeProvider) {
     const KindeProvider = mod.KindeProvider;
@@ -1577,7 +1583,17 @@ const DynamicKindeProvider: FC<{ domain: string; clientId: string; redirectUri: 
 
   // Fallback without SDK: unauthenticated state but UI loads
   const fallback: AuthState = { isAuthenticated: false, isLoading: false, user: undefined, login: () => {}, register: () => {}, logout: () => {} };
-  return <AuthContext.Provider value={fallback}>{children}</AuthContext.Provider>;
+  return (
+    <>
+      {sdkError && (
+        <div style={{ position: 'fixed', top: 8, right: 8, background: '#fff8e1', color: '#7a5d00', border: '1px solid #f1d48a', padding: '8px 12px', borderRadius: 8, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 2000 }}>
+          Autenticación temporalmente no disponible.
+          <button onClick={() => setAttempts(a => a + 1)} style={{ marginLeft: 8, background: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>Reintentar</button>
+        </div>
+      )}
+      <AuthContext.Provider value={fallback}>{children}</AuthContext.Provider>
+    </>
+  );
 };
 
     // Load and persist courses list
