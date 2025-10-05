@@ -11,12 +11,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react-dom": "^19.1.1",
-    "react": "^19.1.1",
-    "@kinde-oss/kinde-auth-react": "latest"
+    "react-dom": "18.2.0",
+    "react": "18.2.0",
+    "@kinde-oss/kinde-auth-react": "2.0.0"
+  },
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   },
   "engines": {
-    "node": ">=18.17"
+    "node": "20.x"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
