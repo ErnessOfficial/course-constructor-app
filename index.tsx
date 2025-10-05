@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useMemo, FC, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, FC, useEffect, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom/client';
 // Gemini calls are proxied via our backend at /api/generate
-import { KindeProvider, useKindeAuth } from '@kinde-oss/kinde-auth-react';
+// Kinde auth is dynamically imported to avoid runtime crashes if SDK mismatches
 
 // --- TYPE DEFINITIONS (as per project structure) ---
 type BroadCategory = 'Autoconocimiento' | 'Gestión Emocional' | 'Habilidades Sociales';
@@ -368,12 +368,12 @@ const CourseList: FC<{
     );
 };
 
-import { useKindeAuth as useKindeAuthInForm } from '@kinde-oss/kinde-auth-react';
+// Use our dynamic auth context instead of direct Kinde import
 
 const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveToList: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveToList }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
-    const { logout } = (useKindeAuthInForm() as any) || {};
+    const { logout } = useAuth();
     const [saveToast, setSaveToast] = useState<string | null>(null);
     const saveDraft = (d: Course) => {
         try {
@@ -1264,8 +1264,12 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToE
 // --- AUTH GATE & SETUP ---
 interface ProfileData { firstName: string; lastName: string; company?: string; email: string; username: string; avatarDataUrl?: string; }
 
+type AuthState = { isAuthenticated: boolean; isLoading: boolean; user?: any; login: () => void; register: () => void; logout: () => void };
+const AuthContext = createContext<AuthState>({ isAuthenticated: false, isLoading: false, login: () => {}, register: () => {}, logout: () => {} });
+const useAuth = () => useContext(AuthContext);
+
 const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, user, login, register, logout } = useKindeAuth() as any;
+  const { isAuthenticated, isLoading, user, login, register, logout } = useAuth();
   const [needsProfile, setNeedsProfile] = useState(false);
   const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
   const [showProfileEditor, setShowProfileEditor] = useState(false);
@@ -1524,14 +1528,56 @@ const KindeWrappedApp: FC = () => {
   const logoutUri = (import.meta as any).env?.VITE_KINDE_LOGOUT_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
   return (
-    <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
+    <DynamicKindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
       <ErrorBoundary>
         <AuthGate>
           <App />
         </AuthGate>
       </ErrorBoundary>
-    </KindeProvider>
+    </DynamicKindeProvider>
   );
+};
+
+const DynamicKindeProvider: FC<{ domain: string; clientId: string; redirectUri: string; logoutUri: string; children: React.ReactNode }> = ({ domain, clientId, redirectUri, logoutUri, children }) => {
+  const [mod, setMod] = useState<any | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const m = await import('@kinde-oss/kinde-auth-react');
+        if (mounted) setMod(m);
+      } catch (e) {
+        console.error('Kinde SDK failed to load, continuing without auth SDK:', e);
+        if (mounted) setMod(null);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  if (mod && mod.KindeProvider) {
+    const KindeProvider = mod.KindeProvider;
+    const KindeConsumer: FC<{ children: React.ReactNode }> = ({ children }) => {
+      const state = mod.useKindeAuth ? (mod.useKindeAuth() as any) : { isAuthenticated: false, isLoading: false, user: undefined, login: () => {}, register: () => {}, logout: () => {} };
+      const value: AuthState = {
+        isAuthenticated: !!state?.isAuthenticated,
+        isLoading: !!state?.isLoading,
+        user: state?.user,
+        login: state?.login || (() => {}),
+        register: state?.register || (() => {}),
+        logout: state?.logout || (() => {}),
+      };
+      return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    };
+    return (
+      <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
+        <KindeConsumer>{children}</KindeConsumer>
+      </KindeProvider>
+    );
+  }
+
+  // Fallback without SDK: unauthenticated state but UI loads
+  const fallback: AuthState = { isAuthenticated: false, isLoading: false, user: undefined, login: () => {}, register: () => {}, logout: () => {} };
+  return <AuthContext.Provider value={fallback}>{children}</AuthContext.Provider>;
 };
 
     // Load and persist courses list
