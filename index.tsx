@@ -159,8 +159,10 @@ const App: FC = () => {
     return (
         <div style={styles.appContainer}>
             <header style={styles.header}>
-                <h1 style={styles.h1}><i className="fas fa-brain"></i> AI Course Creator</h1>
-                <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxHeight: 56, height: '56px', width: 'auto' }} />
+                    <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+                </div>
                 {IS_GH_PAGES && !API_BASE && (
                     <p style={{color: '#dc3545', marginTop: '0.5rem'}}>
                         Atención: Estás en GitHub Pages sin backend configurado. Define el secret <code>VITE_API_BASE</code> con la URL de tu backend o usa el despliegue en Vercel.
@@ -880,12 +882,17 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
   if (isLoading) return <div style={{ padding: 24 }}>Cargando autenticación...</div>;
   if (!isAuthenticated) {
     return (
-      <div style={{ maxWidth: 520, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
-        <h2 style={{ marginTop: 0 }}>Bienvenido a AI Course Creator</h2>
-        <p>Accede o crea tu cuenta para continuar.</p>
+      <div style={{ maxWidth: 720, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
+        <h2 style={{ marginTop: 0 }}>Bienvenido a AnImiKoding by AnImiK</h2>
+        <p style={{ margin: '8px 0 16px 0' }}>
+          Bienestar Emocional a la velocidad de la IA. Crea automáticamente cursos por módulos con ayuda de la IA en nuestra aplicación y genera el código optimizado (.ts o .html) sin tener que programar, para que puedas lanzarlos sin límites ni demoras técnicas.
+        </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
           <button style={styles.button} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
           <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Iniciar sesión</button>
+        </div>
+        <div style={{ marginTop: 24 }}>
+          <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxWidth: 360, width: '100%', height: 'auto' }} />
         </div>
       </div>
     );
