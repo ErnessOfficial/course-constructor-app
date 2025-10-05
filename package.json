@@ -16,7 +16,7 @@
     "@kinde-oss/kinde-auth-react": "latest"
   },
   "engines": {
-    "node": ">=18.17"
+    "node": "20.x"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
