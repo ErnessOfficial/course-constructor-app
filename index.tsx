@@ -299,7 +299,7 @@ const App: FC = () => {
                         alert('Curso guardado en la lista. Puedes continuar editando cuando quieras.');
                     }} />}
                     {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} onBack={(data) => { setCurrentCourse(data); setStep(1); }} />}
-                    {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
+                    {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} onBackToEdit={() => setStep(2)} />}
                 </>
             )}
         </div>
@@ -1054,7 +1054,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
     );
 };
 
-const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ course, onRestart }) => {
+const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToEdit: () => void }> = ({ course, onRestart, onBackToEdit }) => {
     const generatedCode = useMemo(() => {
         const courseObjectString = JSON.stringify({
             id: course.id,
@@ -1226,10 +1226,11 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
         <div style={styles.card}>
             <h2 style={styles.h2}>¡Curso Generado Exitosamente!</h2>
             <p>El archivo <strong>{course.id}.ts</strong> está listo para ser descargado.</p>
+            <p style={{ color: 'var(--muted-color)' }}>Sugeridos: <code>{course.id}.ts</code> y <code>{course.id}.html</code></p>
             
             <h4>Código del Curso:</h4>
             <pre style={styles.generatedCode}><code>{generatedCode}</code></pre>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <button style={styles.button} onClick={handleDownload}><i className="fas fa-download"></i> Descargar Archivo .ts</button>
               <button style={{ ...styles.button, backgroundColor: '#0ea5e9' }} onClick={() => {
                 const blob = new Blob([htmlCode], { type: 'text/html' });
@@ -1242,6 +1243,9 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
               }}><i className="fas fa-file-code"></i> Descargar Archivo .html</button>
+              <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={onBackToEdit}>
+                <i className="fas fa-edit"></i> Continuar edición
+              </button>
             </div>
             
             <h4 style={{marginTop: '2rem'}}>Lista de Archivos Requeridos:</h4>
