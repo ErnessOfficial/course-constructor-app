@@ -299,7 +299,7 @@ const App: FC = () => {
                         alert('Curso guardado en la lista. Puedes continuar editando cuando quieras.');
                     }} />}
                     {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} onBack={(data) => { setCurrentCourse(data); setStep(1); }} />}
-                    {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} onBackToEdit={() => setStep(2)} />}
+                    {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
             )}
         </div>
@@ -368,12 +368,12 @@ const CourseList: FC<{
     );
 };
 
-// Use our dynamic auth context instead of direct Kinde import
+import { useKindeAuth as useKindeAuthInForm } from '@kinde-oss/kinde-auth-react';
 
 const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveToList: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveToList }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
-    const { logout } = useAuth();
+    const { logout } = (useKindeAuthInForm() as any) || {};
     const [saveToast, setSaveToast] = useState<string | null>(null);
     const saveDraft = (d: Course) => {
         try {
@@ -1054,7 +1054,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
     );
 };
 
-const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToEdit: () => void }> = ({ course, onRestart, onBackToEdit }) => {
+const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ course, onRestart }) => {
     const generatedCode = useMemo(() => {
         const courseObjectString = JSON.stringify({
             id: course.id,
@@ -1108,34 +1108,17 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToE
                 default: return '';
             }
         };
-        const partsHtml = (course.modules || []).map((mod, mi) => {
-            const modSlug = slugify(mod.title || `mod-${mi+1}`);
-            const parts = (mod.parts || []).map((p, pi) => {
-                const partSlug = slugify(p.title || `parte-${pi+1}`);
-                return `
-                <article class="part" id="part-${modSlug}-${partSlug}">
+        const partsHtml = (course.modules || []).map((mod, mi) => `
+            <section class="module">
+              <h2>${esc(mod.title)}</h2>
+              ${(mod.parts || []).map((p, pi) => `
+                <article class="part">
                   <h3>${esc(p.title)}</h3>
                   ${(p.resources || []).map(renderResource).join('\n')}
-                </article>`;
-            }).join('\n');
-            return `
-            <section class="module" id="mod-${modSlug}">
-              <h2>${esc(mod.title)}</h2>
-              ${parts}
-            </section>`;
-        }).join('\n');
-
-        const tocHtml = (() => {
-            const mods = (course.modules || []).map((mod, mi) => {
-                const modSlug = slugify(mod.title || `mod-${mi+1}`);
-                const parts = (mod.parts || []).map((p, pi) => {
-                    const partSlug = slugify(p.title || `parte-${pi+1}`);
-                    return `<li><a href="#part-${modSlug}-${partSlug}">${esc(p.title)}</a></li>`;
-                }).join('');
-                return `<li><a href="#mod-${modSlug}">${esc(mod.title)}</a>${parts ? `<ul>${parts}</ul>` : ''}</li>`;
-            }).join('');
-            return `<nav class="toc"><h3>Contenido</h3><ul>${mods}</ul></nav>`;
-        })();
+                </article>
+              `).join('\n')}
+            </section>
+        `).join('\n');
         return `<!doctype html>
 <html lang="es">
   <head>
@@ -1148,19 +1131,10 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToE
       h2 { border-bottom: 2px solid #8ab665; padding-bottom: 4px; }
       .module { margin-bottom: 20px; }
       .part { background: #e4fae8; border: 1px solid #cfe8d4; padding: 12px; border-radius: 8px; margin: 10px 0; }
-      .cover { max-width: 720px; width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-      .toc { background: #f5f7f5; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 14px 0; }
-      .toc ul { margin: 6px 0 0 16px; }
       blockquote { border-left: 4px solid #22b37b; padding: 8px 12px; background: #e4fae8; border-radius: 6px; }
       table { width: 100%; border-collapse: collapse; }
       table th, table td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
       table thead th { background: #f3f4f6; }
-      /* Quiz styles */
-      .quiz .question { margin: 10px 0; }
-      .quiz .question ul { list-style: none; padding-left: 0; }
-      .quiz .question li { padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; margin: 6px 0; cursor: pointer; background: #fff; }
-      .quiz .question li.selected { background: #e6ffed; border-color: #a7f3d0; }
-      .quiz .question .feedback { margin-top: 6px; color: #667c66; }
     </style>
   </head>
   <body>
@@ -1168,29 +1142,8 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToE
       <h1>${esc(course.title)}</h1>
       <h4>${esc(course.subtitle)}</h4>
       <p>${esc(course.description)}</p>
-      ${course.coverImage ? `<img class="cover" src="${esc(`/images/${sanitizeForPath(course.coverImage)}`)}" alt="${esc(course.title)}" />` : ''}
     </header>
-    ${tocHtml}
     ${partsHtml}
-    <script>
-      // Simple quiz interaction: click an option to reveal its feedback
-      (function(){
-        document.addEventListener('click', function(e){
-          var el = e.target;
-          if (!el) return;
-          var li = el.closest ? el.closest('.quiz .question li') : null;
-          if (!li) return;
-          var question = li.closest ? li.closest('.quiz .question') : null;
-          if (!question) return;
-          var allLis = question.querySelectorAll('li');
-          for (var i=0;i<allLis.length;i++){ allLis[i].classList.remove('selected'); }
-          var allFb = question.querySelectorAll('.feedback');
-          for (var j=0;j<allFb.length;j++){ allFb[j].style.display = 'none'; }
-          var fb = li.querySelector('.feedback');
-          if (fb){ fb.style.display = 'block'; li.classList.add('selected'); }
-        });
-      })();
-    </script>
   </body>
 </html>`;
     }, [course]);
@@ -1226,11 +1179,10 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToE
         <div style={styles.card}>
             <h2 style={styles.h2}>¡Curso Generado Exitosamente!</h2>
             <p>El archivo <strong>{course.id}.ts</strong> está listo para ser descargado.</p>
-            <p style={{ color: 'var(--muted-color)' }}>Sugeridos: <code>{course.id}.ts</code> y <code>{course.id}.html</code></p>
             
             <h4>Código del Curso:</h4>
             <pre style={styles.generatedCode}><code>{generatedCode}</code></pre>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button style={styles.button} onClick={handleDownload}><i className="fas fa-download"></i> Descargar Archivo .ts</button>
               <button style={{ ...styles.button, backgroundColor: '#0ea5e9' }} onClick={() => {
                 const blob = new Blob([htmlCode], { type: 'text/html' });
@@ -1243,9 +1195,6 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void, onBackToE
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
               }}><i className="fas fa-file-code"></i> Descargar Archivo .html</button>
-              <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={onBackToEdit}>
-                <i className="fas fa-edit"></i> Continuar edición
-              </button>
             </div>
             
             <h4 style={{marginTop: '2rem'}}>Lista de Archivos Requeridos:</h4>
