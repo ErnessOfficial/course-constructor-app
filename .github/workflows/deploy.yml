@@ -25,10 +25,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # Removed cache because no lockfile is present
+          cache: 'npm'
 
-      - name: Install deps
-        run: npm install
+      - name: Install deps (ci)
+        run: npm ci
 
       - name: Build
         env:
