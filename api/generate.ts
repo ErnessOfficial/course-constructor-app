@@ -109,6 +109,17 @@ export default async function handler(req: any, res: any) {
     const detail = errors.map(e => `${e.version}/${e.model} -> ${e.status}: ${e.message}`).join(' | ');
     res.status(400).json({ error: `Gemini failed for all candidates: ${detail}` });
     return;
+    let json: any = {};
+    try { json = JSON.parse(raw); } catch { json = raw; }
+    // Safety / prompt feedback handling
+    const promptFeedback = json?.promptFeedback;
+    if (promptFeedback?.blockReason) {
+      res.status(400).json({ error: `Request blocked: ${promptFeedback.blockReason}` });
+      return;
+    }
+    const parts = json?.candidates?.[0]?.content?.parts || [];
+    const outText = parts.map((p: any) => p?.text).filter(Boolean).join('\n');
+    res.status(200).json({ text: outText });
   } catch (e: any) {
     res.status(400).json({ error: e?.message || 'Bad Request' });
   }

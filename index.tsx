@@ -18,7 +18,7 @@ interface IFrameActivity extends BaseActivity { type: 'iframe'; html: string; }
 type Activity = TextActivity | VideoActivity | AudioActivity | QuizActivity | IFrameActivity | ImageActivity;
 interface ModulePart { id: string; title: string; resources: Activity[]; }
 interface Module { id: string; title: string; parts: ModulePart[]; }
-interface Course { id: string; title: string; subtitle: string; description: string; category: string; broadCategories: BroadCategory[]; coverImage: string; instructor: Instructor; learningObjectives: string[]; modules: Module[]; status?: 'draft' | 'completed'; updatedAt?: string; }
+interface Course { id: string; title: string; subtitle: string; description: string; category: string; broadCategories: BroadCategory[]; coverImage: string; instructor: Instructor; learningObjectives: string[]; modules: Module[]; }
 
 // --- STYLES OBJECT ---
 const styles: { [key: string]: React.CSSProperties } = {
@@ -129,17 +129,7 @@ const App: FC = () => {
     };
 
     const handleCreateNew = () => {
-        try {
-            const draft = localStorage.getItem('draftCourse');
-            if (draft) {
-                const parsed = JSON.parse(draft);
-                setCurrentCourse(parsed);
-            } else {
-                setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
-            }
-        } catch {
-            setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
-        }
+        setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
         setStep(1);
         setView('create');
     };
@@ -147,16 +137,6 @@ const App: FC = () => {
     const handleBackToList = () => {
         setView('list');
         setCurrentCourse(null);
-    };
-
-    const handleBack = () => {
-        if (view === 'create') {
-            if (step > 1) {
-                setStep(step - 1);
-            } else {
-                handleBackToList();
-            }
-        }
     };
 
     const handleFormSubmit = (courseData: Course) => {
@@ -173,25 +153,14 @@ const App: FC = () => {
 
     const handleFinishEditing = (finalCourse: Course) => {
         setCurrentCourse(finalCourse);
-        saveCourseToList(finalCourse);
-        try { localStorage.setItem('draftCourse', JSON.stringify(finalCourse)); } catch {}
         setStep(3);
     };
 
     return (
         <div style={styles.appContainer}>
             <header style={styles.header}>
-                {view !== 'list' && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8 }}>
-                    <button type="button" onClick={handleBack} style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }}>
-                      <i className="fas fa-arrow-left"></i> Volver
-                    </button>
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                    <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxHeight: 56, height: '56px', width: 'auto' }} />
-                    <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
-                </div>
+                <h1 style={styles.h1}><i className="fas fa-brain"></i> AI Course Creator</h1>
+                <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
                 {IS_GH_PAGES && !API_BASE && (
                     <p style={{color: '#dc3545', marginTop: '0.5rem'}}>
                         Atención: Estás en GitHub Pages sin backend configurado. Define el secret <code>VITE_API_BASE</code> con la URL de tu backend o usa el despliegue en Vercel.
@@ -204,101 +173,14 @@ const App: FC = () => {
                         {testingAI ? 'Probando conexión...' : (aiAvailable ? 'Probar conexión a IA' : 'IA no disponible (configura backend)')}
                     </button>
                 </div>
-                {view === 'create' && step === 1 && (
-                  <h3 style={{ color: 'var(--primary-color)', marginTop: '16px' }}>Paso 1: Crea la ficha del curso completando el siguiente formulario</h3>
-                )}
             </header>
             
-            {view === 'list' && <CourseList
-                courses={courses}
-                onCreateNew={handleCreateNew}
-                onLoadDraft={() => {
-                    try {
-                        const raw = localStorage.getItem('draftCourse');
-                        if (!raw) { alert('No hay borrador guardado.'); return; }
-                        const parsed = JSON.parse(raw);
-                        setCurrentCourse(parsed);
-                        setStep(1);
-                        setView('create');
-                    } catch {
-                        alert('No se pudo cargar el borrador.');
-                    }
-                }}
-                onDeleteDraft={() => {
-                    try { localStorage.removeItem('draftCourse'); alert('Borrador eliminado.'); } catch {}
-                }}
-                onEditInfo={(course) => { setCurrentCourse(course); setStep(1); setView('create'); }}
-                onEditContent={(course) => { setCurrentCourse(course); setStep(2); setView('create'); }}
-                onViewCode={(course) => { setCurrentCourse(course); setStep(3); setView('create'); }}
-                onRegenerateCode={(course) => {
-                    const regenerated: Course = { ...course, updatedAt: new Date().toISOString() };
-                    setCurrentCourse(regenerated);
-                    try {
-                        const raw = localStorage.getItem('coursesList');
-                        const list: Course[] = raw ? JSON.parse(raw) : [];
-                        const idx = list.findIndex(c => c.id === regenerated.id);
-                        const next = idx >= 0 ? [...list.slice(0, idx), regenerated, ...list.slice(idx + 1)] : [...list, regenerated];
-                        localStorage.setItem('coursesList', JSON.stringify(next));
-                        setCourses(next);
-                    } catch {}
-                    setStep(3); setView('create');
-                }}
-                onFinalizeCourse={(course) => {
-                    const completed: Course = { ...course, status: 'completed', updatedAt: new Date().toISOString() };
-                    setCurrentCourse(completed);
-                    // persist
-                    try {
-                        const raw = localStorage.getItem('coursesList');
-                        const list: Course[] = raw ? JSON.parse(raw) : [];
-                        const idx = list.findIndex(c => c.id === completed.id);
-                        const next = idx >= 0 ? [...list.slice(0, idx), completed, ...list.slice(idx + 1)] : [...list, completed];
-                        localStorage.setItem('coursesList', JSON.stringify(next));
-                    } catch {}
-                    setStep(3); setView('create');
-                }}
-                onDeleteCourse={(course) => {
-                    if (!confirm(`¿Eliminar el curso "${course.title || course.id}" de la lista?`)) return;
-                    try {
-                        const raw = localStorage.getItem('coursesList');
-                        const list: Course[] = raw ? JSON.parse(raw) : [];
-                        const next = list.filter(c => c.id !== course.id);
-                        localStorage.setItem('coursesList', JSON.stringify(next));
-                        setCourses(next);
-                        const draft = localStorage.getItem('draftCourse');
-                        if (draft) {
-                          const d = JSON.parse(draft);
-                          if (d?.id === course.id) localStorage.removeItem('draftCourse');
-                        }
-                    } catch {}
-                }}
-            />}
+            {view === 'list' && <CourseList courses={courses} onCreateNew={handleCreateNew} />}
             
             {view === 'create' && currentCourse && (
                 <>
-                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveToList={(draft) => {
-                        // Normalize and assign id/cover before saving to list
-                        const slug = slugify(draft.title || 'curso');
-                        const normalized: Course = {
-                            ...draft,
-                            id: draft.id || slug || `curso-${Date.now()}`,
-                            coverImage: draft.coverImage || `${slug || 'curso'}_portada.png`,
-                            status: 'draft',
-                            updatedAt: new Date().toISOString(),
-                        };
-                        setCurrentCourse(normalized);
-                        // Persist to list
-                        try {
-                          const raw = localStorage.getItem('coursesList');
-                          const list: Course[] = raw ? JSON.parse(raw) : [];
-                          const idx = list.findIndex(c => c.id === normalized.id);
-                          const next = idx >= 0 ? [...list.slice(0, idx), normalized, ...list.slice(idx + 1)] : [...list, normalized];
-                          localStorage.setItem('coursesList', JSON.stringify(next));
-                        } catch {}
-                        // Also keep the latest draft
-                        try { localStorage.setItem('draftCourse', JSON.stringify(normalized)); } catch {}
-                        alert('Curso guardado en la lista. Puedes continuar editando cuando quieras.');
-                    }} />}
-                    {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} onBack={(data) => { setCurrentCourse(data); setStep(1); }} />}
+                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} />}
+                    {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} />}
                     {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
             )}
@@ -308,81 +190,23 @@ const App: FC = () => {
 
 // --- SUB-COMPONENTS ---
 
-const CourseList: FC<{
-  courses: Course[],
-  onCreateNew: () => void,
-  onLoadDraft: () => void,
-  onDeleteDraft: () => void,
-  onEditInfo: (c: Course) => void,
-  onEditContent: (c: Course) => void,
-  onViewCode: (c: Course) => void,
-  onRegenerateCode: (c: Course) => void,
-  onFinalizeCourse: (c: Course) => void,
-  onDeleteCourse: (c: Course) => void,
-}> = ({ courses, onCreateNew, onLoadDraft, onDeleteDraft, onEditInfo, onEditContent, onViewCode, onRegenerateCode, onFinalizeCourse, onDeleteCourse }) => {
-    const hasDraft = typeof window !== 'undefined' && !!localStorage.getItem('draftCourse');
-    return (
-      <div style={styles.card}>
-          <h2 style={styles.h2}>Mis Cursos</h2>
-          {courses.length === 0 ? (
-              <p>Aún no has creado ningún curso.</p>
-          ) : (
-              <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
-                {courses.map(c => (
-                  <li key={c.id} style={{ marginBottom: 10, border: '1px solid var(--border-color)', borderRadius: 8, padding: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <div>
-                        <strong>{c.title || '(Sin título)'}</strong>
-                        {c.status && <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 12, background: c.status === 'completed' ? '#e6ffed' : '#f3f4f6', color: c.status === 'completed' ? '#057a55' : '#374151', fontSize: 12 }}>{c.status === 'completed' ? 'Completado' : 'Borrador'}</span>}
-                        {c.updatedAt && <span style={{ marginLeft: 8, color: 'var(--muted-color)', fontSize: 12 }}>Actualizado: {new Date(c.updatedAt).toLocaleString()}</span>}
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '6px 10px' }} onClick={() => onEditInfo(c)} title="Editar ficha" type="button"><i className="fas fa-edit"></i> Ficha</button>
-                        <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '6px 10px' }} onClick={() => onEditContent(c)} title="Editar contenido" type="button"><i className="fas fa-layer-group"></i> Contenido</button>
-                        <button style={{ ...styles.button, padding: '6px 10px' }} onClick={() => onViewCode(c)} title="Ver código" type="button"><i className="fas fa-eye"></i> Ver código</button>
-                        <button style={{ ...styles.button, padding: '6px 10px', backgroundColor: '#0ea5e9' }} onClick={() => onRegenerateCode(c)} title="Regenerar código" type="button"><i className="fas fa-sync"></i> Regenerar</button>
-                        <button style={{ ...styles.button, backgroundColor: 'var(--success-color)', padding: '6px 10px' }} onClick={() => onFinalizeCourse(c)} title="Finalizar" type="button"><i className="fas fa-check"></i> Finalizar</button>
-                        <button style={{ ...styles.button, ...styles.buttonDanger, padding: '6px 10px' }} onClick={() => onDeleteCourse(c)} title="Eliminar" type="button"><i className="fas fa-trash"></i></button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-          )}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button style={styles.button} onClick={onCreateNew}>
-                <i className="fas fa-plus"></i> Crear Nuevo Curso
-            </button>
-            {hasDraft && (
-              <>
-                <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={onLoadDraft}>
-                    <i className="fas fa-folder-open"></i> Cargar borrador
-                </button>
-                <button style={{ ...styles.button, ...styles.buttonDanger }} onClick={onDeleteDraft}>
-                    <i className="fas fa-trash"></i> Eliminar borrador
-                </button>
-              </>
-            )}
-          </div>
-      </div>
-    );
-};
+const CourseList: FC<{ courses: Course[], onCreateNew: () => void }> = ({ courses, onCreateNew }) => (
+    <div style={styles.card}>
+        <h2 style={styles.h2}>Mis Cursos</h2>
+        {courses.length === 0 ? (
+            <p>Aún no has creado ningún curso.</p>
+        ) : (
+            <ul>{courses.map(c => <li key={c.id}>{c.title}</li>)}</ul>
+        )}
+        <button style={styles.button} onClick={onCreateNew}>
+            <i className="fas fa-plus"></i> Crear Nuevo Curso
+        </button>
+    </div>
+);
 
-import { useKindeAuth as useKindeAuthInForm } from '@kinde-oss/kinde-auth-react';
-
-const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveToList: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveToList }) => {
+const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void }> = ({ course, onSubmit, onCancel }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
-    const { logout } = (useKindeAuthInForm() as any) || {};
-    const [saveToast, setSaveToast] = useState<string | null>(null);
-    const saveDraft = (d: Course) => {
-        try {
-            localStorage.setItem('draftCourse', JSON.stringify(d));
-            setSaveToast('Borrador guardado');
-            window.clearTimeout((saveDraft as any)._t);
-            (saveDraft as any)._t = window.setTimeout(() => setSaveToast(null), 1800);
-        } catch {}
-    };
     
     const validTags: Record<string, BroadCategory> = {
       'autoconocimiento': 'Autoconocimiento',
@@ -396,100 +220,51 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     };
 
     const handleCategorySelect = (categoryName: string) => {
-        setData(prev => { const next = { ...prev, category: categoryName }; saveDraft(next); return next; });
+        setData(prev => ({ ...prev, category: categoryName }));
     };
     
     const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && tagInput.trim() !== '' && data.broadCategories.length < 10) {
+        if (e.key === 'Enter' && tagInput.trim() !== '' && data.broadCategories.length < 4) {
             e.preventDefault();
             const cleanInput = tagInput.trim().toLowerCase();
             const newTag = validTags[cleanInput];
             
             if (newTag && !data.broadCategories.includes(newTag)) {
-                setData(prev => { const next = {...prev, broadCategories: [...prev.broadCategories, newTag]}; saveDraft(next); return next; });
+                setData(prev => ({...prev, broadCategories: [...prev.broadCategories, newTag]}));
             }
             setTagInput('');
         }
     };
 
     const removeTag = (tagToRemove: BroadCategory) => {
-        setData(prev => { const next = { ...prev, broadCategories: prev.broadCategories.filter(tag => tag !== tagToRemove) }; saveDraft(next); return next; });
+        setData(prev => ({ ...prev, broadCategories: prev.broadCategories.filter(tag => tag !== tagToRemove)}));
     };
     
     const handleAddModule = () => {
         if (data.modules.length < 6) {
-            setData(prev => {
-                const next = {
-                    ...prev,
-                    modules: [...prev.modules, { id: '', title: `Módulo ${prev.modules.length + 1}`, parts: [] }],
-                    learningObjectives: [...prev.learningObjectives, `Objetivo del módulo ${prev.modules.length + 1}`]
-                } as Course;
-                saveDraft(next);
-                return next;
-            });
+            setData(prev => ({
+                ...prev,
+                modules: [...prev.modules, { id: '', title: `Módulo ${prev.modules.length + 1}`, parts: [] }],
+                learningObjectives: [...prev.learningObjectives, `Objetivo del módulo ${prev.modules.length + 1}`]
+            }));
         }
     };
 
     const handleModuleChange = (index: number, value: string) => {
         const newModules = [...data.modules];
         newModules[index].title = value;
-        const next = { ...data, modules: newModules } as Course;
-        setData(next);
-        saveDraft(next);
+        setData(prev => ({ ...prev, modules: newModules }));
     };
 
     const handleObjectiveChange = (index: number, value: string) => {
         const newObjectives = [...data.learningObjectives];
         newObjectives[index] = value;
-        const next = { ...data, learningObjectives: newObjectives } as Course;
-        setData(next);
-        saveDraft(next);
-    };
-
-    const [aiGeneratingIndex, setAiGeneratingIndex] = useState<number | null>(null);
-    const handleAiGenerateObjective = async (i: number) => {
-        const title = data.modules[i]?.title?.trim();
-        if (!title) {
-            alert('Por favor, escribe primero el nombre del módulo.');
-            return;
-        }
-        setAiGeneratingIndex(i);
-        try {
-            const prompt = `Crea un objetivo de aprendizaje conciso y claro (1 sola oración) para un módulo de un curso interactivo orientado al bienestar emocional. Basa el objetivo exclusivamente en el título del módulo entre comillas y no incluyas viñetas, prefijos ni texto adicional. Título del módulo: "${title}". Devuelve solo la oración en español.`;
-            const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
-            const res = await fetch(`${API_BASE}/api/generate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt })
-            });
-            if (!res.ok) {
-                const msg = await res.text().catch(() => '');
-                throw new Error(msg || `HTTP ${res.status}`);
-            }
-            const dataJson = await res.json();
-            const text: string = (dataJson?.text || '').trim();
-            if (text) {
-                handleObjectiveChange(i, text);
-            } else {
-                alert('La IA no devolvió un objetivo. Intenta de nuevo.');
-            }
-        } catch (e: any) {
-            alert(`Error generando objetivo con IA: ${e?.message || e}`);
-        } finally {
-            setAiGeneratingIndex(null);
-        }
+        setData(prev => ({...prev, learningObjectives: newObjectives }));
     };
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        try { localStorage.removeItem('draftCourse'); } catch {}
         onSubmit(data);
-    };
-
-    const handleSaveAndExit = () => {
-        saveDraft(data);
-        if (typeof window !== 'undefined') alert('Ficha guardada localmente. Puedes retomar más tarde desde Crear Nuevo Curso.');
-        logout?.();
     };
 
     const categoryOptions = [
@@ -506,7 +281,6 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     ];
 
     return (
-        <>
         <form onSubmit={handleSubmit} style={styles.card}>
             <h2 style={styles.h2}>Ficha del Curso</h2>
             <div style={styles.inputGroup}>
@@ -540,7 +314,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 </div>
             </div>
             <div style={styles.inputGroup}>
-                <label style={styles.label}>Etiquetas (máx. 10)</label>
+                <label style={styles.label}>Etiquetas (máx. 4)</label>
                 <div>
                     {data.broadCategories.map(tag => 
                       <span key={tag} style={styles.tag}>
@@ -550,49 +324,29 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 </div>
                 <input style={styles.input} type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleTagKeyDown} placeholder="Escribe y presiona Enter..." />
                  <small style={{ color: 'var(--muted-color)', marginTop: '5px', display: 'block' }}>
-                    Valores permitidos: Autoconocimiento, Gestión Emocional, Habilidades Sociales. Límite 10.
+                    Valores permitidos: Autoconocimiento, Gestión Emocional, Habilidades Sociales.
                 </small>
             </div>
             <div style={styles.inputGroup}>
                 <label style={styles.label}>Módulos y Objetivos de Aprendizaje</label>
-                <small style={{ color: 'var(--muted-color)', display: 'block', marginBottom: 8 }}>
-                    ¿Quieres ayuda para redactar los objetivos? Haz clic en el botón a la derecha de cada objetivo para que la IA lo proponga automáticamente.
-                </small>
                 {data.modules.map((mod, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
                         <input style={styles.input} value={mod.title} onChange={e => handleModuleChange(i, e.target.value)} placeholder={`Nombre del Módulo ${i + 1}`} />
                         <input style={styles.input} value={data.learningObjectives[i]} onChange={e => handleObjectiveChange(i, e.target.value)} placeholder={`Objetivo de aprendizaje para el Módulo ${i+1}`} />
-                        <button type="button" title="Objetivo con IA" onClick={() => handleAiGenerateObjective(i)} disabled={aiGeneratingIndex === i}
-                          style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--surface-color)', cursor: 'pointer' }}>
-                            {aiGeneratingIndex === i ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-magic"></i>}
-                        </button>
                     </div>
                 ))}
                 {data.modules.length < 6 && <button type="button" style={{...styles.button, ...styles.buttonSecondary, padding:'8px 16px'}} onClick={handleAddModule}><i className="fas fa-plus"></i> Añadir Módulo</button>}
             </div>
             
-            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '2rem', gap: 12, flexWrap: 'wrap'}}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
-                  <button type="button" style={{...styles.button, backgroundColor: '#1f6feb'}} onClick={handleSaveAndExit}><i className="fas fa-save"></i> Guardar y salir</button>
-                  <button type="button" style={{...styles.button, backgroundColor: 'var(--success-color)'}} onClick={() => { onSaveToList(data); setSaveToast('Curso guardado en la lista'); }}>
-                    <i className="fas fa-bookmark"></i> Guardar en lista
-                  </button>
-                </div>
+            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '2rem'}}>
+                <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
                 <button type="submit" style={styles.button}>Guardar y Continuar <i className="fas fa-arrow-right"></i></button>
             </div>
         </form>
-        {saveToast && (
-            <div style={{ position: 'fixed', right: 20, bottom: 20, background: 'var(--surface-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '10px 14px', boxShadow: 'var(--shadow-md)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className="fas fa-check-circle" style={{ color: 'var(--success-color)' }}></i>
-                <span>{saveToast}</span>
-            </div>
-        )}
-        </>
     );
 };
 
-const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onBack: (data: Course) => void }> = ({ course, onFinish, onBack }) => {
+const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = ({ course, onFinish }) => {
     const [currentCourse, setCurrentCourse] = useState(course);
     const [activeModuleIndex, setActiveModuleIndex] = useState(0);
     const [activePartIndex, setActivePartIndex] = useState(0);
@@ -639,14 +393,11 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onBac
         setCurrentCourse(newCourse);
     };
 
-    const persist = (c: Course) => { try { localStorage.setItem('draftCourse', JSON.stringify(c)); } catch {} };
-
     const updateResource = (modIndex: number, partIndex: number, resIndex: number, updatedActivity: Activity) => {
         const newCourse = { ...currentCourse };
         ensureAtLeastOnePart(newCourse, modIndex);
         newCourse.modules[modIndex].parts[partIndex].resources[resIndex] = updatedActivity;
         setCurrentCourse(newCourse);
-        persist(newCourse);
     };
 
     const addActivity = (type: ActivityType, openAiModal: boolean = false) => {
@@ -669,7 +420,6 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onBac
         };
         newCourse.modules[modIndex].parts[partIndex].resources.push(newActivity);
         setCurrentCourse(newCourse);
-        persist(newCourse);
 
         if (openAiModal) {
             setGeminiTarget({ modIndex, partIndex, resIndex: resources.length });
@@ -701,19 +451,9 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onBac
         setGeminiTarget(null);
     };
 
-    // Reset part index when switching module to avoid out-of-range
-    useEffect(() => {
-        setActivePartIndex(0);
-    }, [activeModuleIndex]);
-
     return (
         <div style={styles.card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <h2 style={styles.h2}>{course.title} - Editor de Contenido</h2>
-              <button type="button" style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} onClick={() => onBack(currentCourse)}>
-                <i className="fas fa-arrow-left"></i> Volver a ficha
-              </button>
-            </div>
+            <h2 style={styles.h2}>{course.title} - Editor de Contenido</h2>
             <div style={styles.tabs}>
                 {currentCourse.modules.map((mod, index) => (
                     <div key={mod.id} style={index === activeModuleIndex ? {...styles.tab, ...styles.activeTab} : styles.tab} onClick={() => setActiveModuleIndex(index)}>
@@ -846,30 +586,19 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
         setHtml(valueHTML || '<p>Escribe aquí tu contenido.</p>');
     }, [valueHTML]);
 
-    const focusEditor = () => {
-        if (editorRef.current) {
-            editorRef.current.focus();
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount === 0) {
-                const range = document.createRange();
-                range.selectNodeContents(editorRef.current);
-                range.collapse(false);
-                sel.removeAllRanges();
-                sel.addRange(range);
-            }
-        }
-    };
-
     const applyCmd = (cmd: string, val?: string) => {
-        focusEditor();
+        // execCommand está deprecado pero sigue ampliamente soportado y sirve para nuestro caso simple
         document.execCommand(cmd, false, val);
         syncHtml();
     };
 
-    const highlightSelection = () => {
-        focusEditor();
-        const ok = document.execCommand('hiliteColor', false, '#fff3a0');
-        if (!ok) document.execCommand('backColor', false, '#fff3a0');
+    const wrapSelection = (tag: 'mark') => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        const el = document.createElement(tag);
+        el.setAttribute('style', 'background-color: #fff3a0;');
+        range.surroundContents(el);
         syncHtml();
     };
 
@@ -900,7 +629,7 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 <button type="button" title="Negrita" style={toolbarButtonStyle} onClick={() => applyCmd('bold')}><i className="fas fa-bold"></i></button>
                 <button type="button" title="Cursiva" style={toolbarButtonStyle} onClick={() => applyCmd('italic')}><i className="fas fa-italic"></i></button>
                 <button type="button" title="Subrayado" style={toolbarButtonStyle} onClick={() => applyCmd('underline')}><i className="fas fa-underline"></i></button>
-                <button type="button" title="Resaltado" style={toolbarButtonStyle} onClick={highlightSelection}><i className="fas fa-highlighter"></i></button>
+                <button type="button" title="Resaltado" style={toolbarButtonStyle} onClick={() => wrapSelection('mark')}><i className="fas fa-highlighter"></i></button>
                 <div style={{ width: 1, background: 'var(--border-color)' }} />
                 <button type="button" title="Nivel 1 - Título" style={toolbarButtonStyle} onClick={() => setBlock('H1')}>H1</button>
                 <button type="button" title="Nivel 2 - Subtítulo" style={toolbarButtonStyle} onClick={() => setBlock('H2')}>H2</button>
@@ -913,7 +642,7 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 suppressContentEditableWarning
                 onInput={syncHtml}
                 onBlur={syncHtml}
-                style={{ minHeight: 140, padding: 12, outline: 'none', direction: 'ltr', unicodeBidi: 'plaintext', textAlign: 'left', whiteSpace: 'pre-wrap' }}
+                style={{ minHeight: 140, padding: 12, outline: 'none' }}
                 dangerouslySetInnerHTML={{ __html: html }}
             />
         </div>
@@ -926,25 +655,14 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
     const [isLoading, setIsLoading] = useState(false);
     const [generatedContent, setGeneratedContent] = useState('');
     const [error, setError] = useState('');
-    const [showPreview, setShowPreview] = useState(false);
 
     const predefinedPrompts = [
-        { name: "Quiz de 3 Preguntas", prompt: `Crea un quiz interactivo sobre el tema '{TOPIC}'. El quiz debe tener 3 preguntas de opción múltiple con 3 opciones cada una. Para cada opción, proporciona un feedback explicando por qué es correcta o incorrecta. Responde únicamente con un objeto JSON que siga esta estructura de TypeScript: \`interface QuizQuestion { question: string; options: { text: string; feedback: string; }[]; }[]\`. No incluyas backticks de markdown ni explicaciones: devuelve solo el JSON, sin texto adicional.` },
-        { name: "Caso Práctico", prompt: "Genera un 'caso práctico' o 'estudio de caso' sobre '{TOPIC}'. Debe presentar una situación realista y terminar con 2 preguntas abiertas que inviten a la reflexión del participante. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones), usando etiquetas básicas como <p>, <strong>, <ul>, <li>." },
-        { name: "Juego de Cartas (Conceptos)", prompt: "Crea un mini juego de cartas sobre '{TOPIC}'. Genera 4 pares de cartas (8 en total). Cada par debe tener un concepto y su definición. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones) que use una <div class='card-game'> con 8 <div class='card'> dentro." },
-        { name: "Metáfora Explicativa", prompt: "Explica el concepto de '{TOPIC}' usando una metáfora o analogía potente. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones) usando un <blockquote>." },
-        { name: "Mito vs. Realidad", prompt: "Crea una tabla 'Mito vs. Realidad' sobre '{TOPIC}', con 3 mitos comunes y su aclaración correspondiente. Responde SOLO con HTML listo para insertar (sin backticks ni explicaciones) usando <table>." },
+        { name: "Quiz de 3 Preguntas", prompt: `Crea un quiz interactivo sobre el tema '{TOPIC}'. El quiz debe tener 3 preguntas de opción múltiple con 3 opciones cada una. Para cada opción, proporciona un feedback explicando por qué es correcta o incorrecta. Responde únicamente con un objeto JSON que siga esta estructura de TypeScript: \`interface QuizQuestion { question: string; options: { text: string; feedback: string; }[]; }[]\`. No incluyas backticks de markdown en tu respuesta.` },
+        { name: "Caso Práctico", prompt: "Genera un 'caso práctico' o 'estudio de caso' sobre '{TOPIC}'. Debe presentar una situación realista y terminar con 2 preguntas abiertas que inviten a la reflexión del participante. Responde con código HTML simple usando <p> y <strong>." },
+        { name: "Juego de Cartas (Conceptos)", prompt: "Crea un mini juego de cartas sobre '{TOPIC}'. Genera 4 pares de cartas (8 en total). Cada par debe tener un concepto y su definición. Responde con código HTML que use una <div> con la clase 'card-game' y dentro 8 <div> con la clase 'card'." },
+        { name: "Metáfora Explicativa", prompt: "Explica el concepto de '{TOPIC}' usando una metáfora o analogía poderosa y fácil de entender. Responde con código HTML usando un <blockquote>." },
+        { name: "Mito vs. Realidad", prompt: "Crea una tabla 'Mito vs. Realidad' sobre '{TOPIC}', con 3 mitos comunes y su correspondiente aclaración. Responde con una tabla HTML (<table>)." },
     ];
-
-    const sanitizeGenerated = (text: string) => {
-        let t = (text || '').replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '').trim();
-        const firstLt = t.indexOf('<');
-        const lastGt = t.lastIndexOf('>');
-        if (firstLt !== -1 && lastGt !== -1 && lastGt > firstLt) {
-            t = t.slice(firstLt, lastGt + 1).trim();
-        }
-        return t;
-    };
 
     const handleGenerate = async (promptTemplate: string) => {
         if (!topic && !promptTemplate.includes('{TOPIC}')) {
@@ -957,7 +675,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
         setError('');
         setGeneratedContent('');
         try {
-            const finalPrompt = `${promptTemplate.replace('{TOPIC}', topic)}\n\nIMPORTANTE: Devuelve únicamente el código solicitado, sin explicaciones, sin prefijos ni sufijos, y sin usar backticks de markdown.`;
+            const finalPrompt = promptTemplate.replace('{TOPIC}', topic);
             const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
             const res = await fetch(`${API_BASE}/api/generate`, {
                 method: 'POST',
@@ -969,7 +687,7 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
                 throw new Error(msg || `HTTP ${res.status}`);
             }
             const data = await res.json();
-            setGeneratedContent(sanitizeGenerated(data.text || ''));
+            setGeneratedContent(data.text || '');
         } catch (e: any) {
             setError(`Error al contactar la IA: ${e.message}`);
         } finally {
@@ -982,17 +700,8 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
              setError("Por favor, escribe un prompt detallado.");
              return;
         }
-        handleGenerate(`${customPrompt}\n\nIMPORTANTE: Devuelve únicamente el código solicitado, sin explicaciones, sin prefijos ni sufijos, y sin usar backticks de markdown.`);
+        handleGenerate(customPrompt);
     }
-
-    const sanitizeForPreview = (html: string) => {
-        let t = html || '';
-        // eliminar scripts y handlers inline
-        t = t.replace(/<script[\s\S]*?<\/script>/gi, '');
-        t = t.replace(/on[a-zA-Z]+\s*=\s*"[^"]*"/gi, '');
-        t = t.replace(/on[a-zA-Z]+\s*=\s*'[^']*'/gi, '');
-        return t;
-    };
     
     return (
         <div style={styles.modalOverlay} onClick={onClose}>
@@ -1026,25 +735,9 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
                             <div>
                                 <h4>Resultado Generado:</h4>
                                 <pre style={styles.generatedCode}><code>{generatedContent}</code></pre>
-                                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: '10px' }}>
-                                  <button style={{...styles.button, ...styles.buttonSecondary}} onClick={() => setShowPreview(v => !v)} type="button">
-                                    {showPreview ? 'Ocultar previsualización' : 'Previsualizar'}
-                                  </button>
-                                  <button style={{...styles.button, ...styles.buttonDanger}} onClick={() => setGeneratedContent('')} type="button">
-                                    Limpiar
-                                  </button>
-                                  <button style={{...styles.button, ...{backgroundColor: 'var(--success-color)'}}} onClick={() => { if (!generatedContent) { alert('No hay contenido para insertar.'); return; } onInsert(generatedContent); onClose(); }} type="button">
+                                <button style={{...styles.button, ...{backgroundColor: 'var(--success-color)'}, marginTop: '1rem'}} onClick={() => { onInsert(generatedContent); onClose(); }}>
                                     <i className="fas fa-check"></i> Insertar Recurso
-                                  </button>
-                                </div>
-                                {showPreview && (
-                                  <div style={{ marginTop: 12, border: '1px solid var(--border-color)', borderRadius: 8, padding: 12, background: '#fafafa' }}>
-                                    <h5 style={{ margin: '4px 0 10px 0' }}>Vista previa</h5>
-                                    {/^\s*</.test(generatedContent)
-                                      ? <div dangerouslySetInnerHTML={{ __html: sanitizeForPreview(generatedContent) }} />
-                                      : <pre style={{ whiteSpace: 'pre-wrap' }}>{generatedContent}</pre>}
-                                  </div>
-                                )}
+                                </button>
                             </div>
                         )}
                     </div>
@@ -1091,63 +784,6 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
         return `import type { Course } from '../../types';\n\n// TODO: Asegúrate de importar tu instructor si es necesario\n// import { mockInstructor } from './courseData';\n\nexport const course: Course = ${courseObjectString};\n\nexport default course;`;
     }, [course]);
 
-    const htmlCode = useMemo(() => {
-        const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const renderResource = (act: any) => {
-            switch (act.type) {
-                case 'video': return `<video controls style="max-width:100%" src="${esc(`/videos/${sanitizeForPath(act.videoSrc)}`)}"></video>`;
-                case 'audio': return `<audio controls src="${esc(`/audios/${sanitizeForPath(act.audioSrc)}`)}"></audio>`;
-                case 'text': return (act.content || []).join('\n');
-                case 'quiz':
-                    try {
-                        const qs = act.questions || [];
-                        return `<div class="quiz">${qs.map((q: any) => `<div class="question"><p>${esc(q.question)}</p><ul>${(q.options||[]).map((op: any) => `<li>${esc(op.text)}<div class="feedback" style="display:none">${esc(op.feedback)}</div></li>`).join('')}</ul></div>`).join('')}</div>`;
-                    } catch { return '<!-- quiz -->'; }
-                case 'image': return `<img style="max-width:100%;height:auto;border-radius:8px" alt="${esc(act.title)}" src="${esc(`/images/${sanitizeForPath(act.imageSrc)}`)}" />`;
-                case 'iframe': return act.html || '';
-                default: return '';
-            }
-        };
-        const partsHtml = (course.modules || []).map((mod, mi) => `
-            <section class="module">
-              <h2>${esc(mod.title)}</h2>
-              ${(mod.parts || []).map((p, pi) => `
-                <article class="part">
-                  <h3>${esc(p.title)}</h3>
-                  ${(p.resources || []).map(renderResource).join('\n')}
-                </article>
-              `).join('\n')}
-            </section>
-        `).join('\n');
-        return `<!doctype html>
-<html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${esc(course.title)}</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 16px; }
-      h1 { color: #141313; }
-      h2 { border-bottom: 2px solid #8ab665; padding-bottom: 4px; }
-      .module { margin-bottom: 20px; }
-      .part { background: #e4fae8; border: 1px solid #cfe8d4; padding: 12px; border-radius: 8px; margin: 10px 0; }
-      blockquote { border-left: 4px solid #22b37b; padding: 8px 12px; background: #e4fae8; border-radius: 6px; }
-      table { width: 100%; border-collapse: collapse; }
-      table th, table td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
-      table thead th { background: #f3f4f6; }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>${esc(course.title)}</h1>
-      <h4>${esc(course.subtitle)}</h4>
-      <p>${esc(course.description)}</p>
-    </header>
-    ${partsHtml}
-  </body>
-</html>`;
-    }, [course]);
-
     const assets = useMemo(() => {
         const fileList = new Set<string>();
         fileList.add(`/images/${sanitizeForPath(course.coverImage)}`);
@@ -1182,20 +818,7 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
             
             <h4>Código del Curso:</h4>
             <pre style={styles.generatedCode}><code>{generatedCode}</code></pre>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button style={styles.button} onClick={handleDownload}><i className="fas fa-download"></i> Descargar Archivo .ts</button>
-              <button style={{ ...styles.button, backgroundColor: '#0ea5e9' }} onClick={() => {
-                const blob = new Blob([htmlCode], { type: 'text/html' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${course.id}.html`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-              }}><i className="fas fa-file-code"></i> Descargar Archivo .html</button>
-            </div>
+            <button style={styles.button} onClick={handleDownload}><i className="fas fa-download"></i> Descargar Archivo .ts</button>
             
             <h4 style={{marginTop: '2rem'}}>Lista de Archivos Requeridos:</h4>
             <p>Asegúrate de agregar los siguientes archivos en las carpetas `public/images`, `public/videos`, y `public/audios` de tu proyecto:</p>
@@ -1214,10 +837,9 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
 interface ProfileData { firstName: string; lastName: string; company?: string; email: string; username: string; avatarDataUrl?: string; }
 
 const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading, user, login, register, logout } = useKindeAuth() as any;
+  const { isAuthenticated, isLoading, user, login, register } = useKindeAuth() as any;
   const [needsProfile, setNeedsProfile] = useState(false);
   const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
-  const [showProfileEditor, setShowProfileEditor] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -1253,64 +875,17 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
     const key = `profile:${uid}`;
     localStorage.setItem(key, JSON.stringify(profile));
     setNeedsProfile(false);
-    setShowProfileEditor(false);
   };
 
-  const uid = user?.id || user?.sub || user?.email || 'anon';
-  const profileKey = `profile:${uid}`;
-  const storedProfile = (() => { try { return JSON.parse(localStorage.getItem(profileKey) || 'null'); } catch { return null; } })();
-  const avatarUrl = storedProfile?.avatarDataUrl as string | undefined;
-
-  const displayName = (() => {
-    const p = storedProfile;
-    if (p?.firstName || p?.lastName) return `${p.firstName || ''} ${p.lastName || ''}`.trim();
-    return user?.given_name || user?.name || user?.email || '';
-  })();
-
-  const HeaderBar = (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
-      {!isAuthenticated ? (
-        <>
-          <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Entrar</button>
-          <button style={{ ...styles.button, padding: '8px 14px' }} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
-        </>
-      ) : (
-        <>
-          <span style={{ color: 'var(--text-color)', fontWeight: 500 }}>{displayName}</span>
-          <button style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }} type="button" onClick={() => {
-            // cargar perfil para el editor
-            const p = storedProfile || { firstName: user?.given_name || '', lastName: user?.family_name || '', company: '', email: user?.email || '', username: (user?.preferred_username || user?.email?.split('@')[0] || '').toLowerCase() };
-            setProfile(p);
-            setShowProfileEditor(true);
-          }}><i className="fas fa-user"></i> Perfil</button>
-          <button style={{ ...styles.button, padding: '8px 14px' }} type="button" onClick={() => logout?.()}><i className="fas fa-sign-out-alt"></i> Salir</button>
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="avatar" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
-          ) : (
-            <i className="fas fa-user-circle" style={{ fontSize: 28, color: 'var(--muted-color)', alignSelf: 'center' }}></i>
-          )}
-        </>
-      )}
-    </div>
-  );
-
-  if (isLoading) return <div>{HeaderBar}<div style={{ padding: 24 }}>Cargando autenticación...</div></div>;
+  if (isLoading) return <div style={{ padding: 24 }}>Cargando autenticación...</div>;
   if (!isAuthenticated) {
     return (
-      <div>
-        {HeaderBar}
-        <div style={{ maxWidth: 720, margin: '20px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
-          <h2 style={{ marginTop: 0 }}>Bienvenido a AnImiKoding by AnImiK</h2>
-          <p style={{ margin: '8px 0 16px 0' }}>
-            Bienestar Emocional a la velocidad de la IA. Crea automáticamente cursos por módulos con ayuda de la IA en nuestra aplicación y genera el código optimizado (.ts o .html) sin tener que programar, para que puedas lanzarlos sin límites ni demoras técnicas.
-          </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-            <button style={styles.button} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
-            <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Iniciar sesión</button>
-          </div>
-          <div style={{ marginTop: 24 }}>
-            <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxWidth: 360, width: '100%', height: 'auto' }} />
-          </div>
+      <div style={{ maxWidth: 520, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)', textAlign: 'center' }}>
+        <h2 style={{ marginTop: 0 }}>Bienvenido a AI Course Creator</h2>
+        <p>Accede o crea tu cuenta para continuar.</p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+          <button style={styles.button} type="button" onClick={register}><i className="fas fa-user-plus"></i> Registrarse</button>
+          <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={login}><i className="fas fa-sign-in-alt"></i> Iniciar sesión</button>
         </div>
       </div>
     );
@@ -1318,153 +893,46 @@ const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (needsProfile) {
     return (
-      <div>
-        {HeaderBar}
-        <div style={{ maxWidth: 720, margin: '20px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)' }}>
-          <h2 style={{ marginTop: 0 }}>Completa tu perfil</h2>
-          <form onSubmit={handleProfileSubmit}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={styles.label}>Nombre</label>
-                <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
-              </div>
-              <div>
-                <label style={styles.label}>Apellido</label>
-                <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
-              </div>
-              <div>
-                <label style={styles.label}>Empresa (opcional)</label>
-                <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
-              </div>
-              <div>
-                <label style={styles.label}>Correo electrónico</label>
-                <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
-              </div>
-              <div>
-                <label style={styles.label}>Nombre de usuario</label>
-                <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
-              </div>
-              <div>
-                <label style={styles.label}>Avatar / Foto</label>
-                <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
-                {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
-              </div>
+      <div style={{ maxWidth: 720, margin: '40px auto', background: 'var(--surface-color)', padding: 24, borderRadius: 12, boxShadow: 'var(--shadow-md)' }}>
+        <h2 style={{ marginTop: 0 }}>Completa tu perfil</h2>
+        <form onSubmit={handleProfileSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={styles.label}>Nombre</label>
+              <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-              <button style={styles.button} type="submit">Guardar perfil</button>
+            <div>
+              <label style={styles.label}>Apellido</label>
+              <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
             </div>
-          </form>
-        </div>
-        {/* Editor de perfil invocable desde el header */}
-        {showProfileEditor && (
-          <div style={styles.modalOverlay} onClick={() => setShowProfileEditor(false)}>
-            <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-              <h3>Editar perfil</h3>
-              <form onSubmit={handleProfileSubmit}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={styles.label}>Nombre</label>
-                    <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label style={styles.label}>Apellido</label>
-                    <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label style={styles.label}>Empresa (opcional)</label>
-                    <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={styles.label}>Correo electrónico</label>
-                    <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label style={styles.label}>Nombre de usuario</label>
-                    <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
-                  </div>
-                  <div>
-                    <label style={styles.label}>Avatar / Foto</label>
-                    <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
-                    {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, gap: 8 }}>
-                  <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={() => setShowProfileEditor(false)}>Cancelar</button>
-                  <button style={styles.button} type="submit">Guardar</button>
-                </div>
-              </form>
+            <div>
+              <label style={styles.label}>Empresa (opcional)</label>
+              <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
+            </div>
+            <div>
+              <label style={styles.label}>Correo electrónico</label>
+              <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
+            </div>
+            <div>
+              <label style={styles.label}>Nombre de usuario</label>
+              <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
+            </div>
+            <div>
+              <label style={styles.label}>Avatar / Foto</label>
+              <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
+              {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
             </div>
           </div>
-        )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button style={styles.button} type="submit">Guardar perfil</button>
+          </div>
+        </form>
       </div>
     );
   }
 
-  return (
-    <div>
-      {HeaderBar}
-      {children}
-      {showProfileEditor && (
-        <div style={styles.modalOverlay} onClick={() => setShowProfileEditor(false)}>
-          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
-            <h3>Editar perfil</h3>
-            <form onSubmit={handleProfileSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={styles.label}>Nombre</label>
-                  <input style={styles.input} value={profile.firstName} onChange={e => setProfile({ ...profile, firstName: e.target.value })} required />
-                </div>
-                <div>
-                  <label style={styles.label}>Apellido</label>
-                  <input style={styles.input} value={profile.lastName} onChange={e => setProfile({ ...profile, lastName: e.target.value })} required />
-                </div>
-                <div>
-                  <label style={styles.label}>Empresa (opcional)</label>
-                  <input style={styles.input} value={profile.company} onChange={e => setProfile({ ...profile, company: e.target.value })} />
-                </div>
-                <div>
-                  <label style={styles.label}>Correo electrónico</label>
-                  <input style={styles.input} type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} required />
-                </div>
-                <div>
-                  <label style={styles.label}>Nombre de usuario</label>
-                  <input style={styles.input} value={profile.username} onChange={e => setProfile({ ...profile, username: e.target.value })} required />
-                </div>
-                <div>
-                  <label style={styles.label}>Avatar / Foto</label>
-                  <input style={styles.input} type="file" accept="image/*" onChange={handleAvatarChange} />
-                  {profile.avatarDataUrl && <img src={profile.avatarDataUrl} alt="avatar" style={{ marginTop: 8, width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />}
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, gap: 8 }}>
-                <button style={{ ...styles.button, ...styles.buttonSecondary }} type="button" onClick={() => setShowProfileEditor(false)}>Cancelar</button>
-                <button style={styles.button} type="submit">Guardar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <>{children}</>;
 };
-
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(): { hasError: boolean } { return { hasError: true }; }
-  componentDidCatch(err: any) { console.error('UI error boundary caught:', err); }
-  render() {
-    if (this.state.hasError) {
-      return <div style={{ padding: 24 }}>
-        <h3>Ha ocurrido un error inesperado</h3>
-        <p>Hemos guardado tu progreso como borrador para evitar pérdidas. Recarga la página e intenta continuar.</p>
-      </div>;
-    }
-    return <>{this.props.children}</>;
-  }
-}
 
 const KindeWrappedApp: FC = () => {
   const domain = (import.meta as any).env?.VITE_KINDE_DOMAIN || 'https://animikrea.kinde.com';
@@ -1474,33 +942,12 @@ const KindeWrappedApp: FC = () => {
 
   return (
     <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
-      <ErrorBoundary>
-        <AuthGate>
-          <App />
-        </AuthGate>
-      </ErrorBoundary>
+      <AuthGate>
+        <App />
+      </AuthGate>
     </KindeProvider>
   );
 };
 
-    // Load and persist courses list
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem('coursesList');
-            if (raw) setCourses(JSON.parse(raw));
-        } catch {}
-    }, []);
-    useEffect(() => {
-        try { localStorage.setItem('coursesList', JSON.stringify(courses)); } catch {}
-    }, [courses]);
-
-    const saveCourseToList = (course: Course) => {
-        setCourses(prev => {
-            const idx = prev.findIndex(c => c.id === course.id);
-            const next = idx >= 0 ? [...prev.slice(0, idx), course, ...prev.slice(idx + 1)] : [...prev, course];
-            try { localStorage.setItem('coursesList', JSON.stringify(next)); } catch {}
-            return next;
-        });
-    };
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(<React.StrictMode><KindeWrappedApp /></React.StrictMode>);
