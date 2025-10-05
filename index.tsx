@@ -151,6 +151,19 @@ const App: FC = () => {
         setStep(2);
     };
 
+    const handleSaveAndExit = (courseData: Course) => {
+        const slug = slugify(courseData.title);
+        const finalCourseData: Course = {
+            ...courseData,
+            id: slug || `curso-${Date.now()}`,
+            coverImage: `${slug || 'curso'}_portada.png`,
+            modules: courseData.modules.map((m, i) => ({ id: `m${i + 1}`, title: m.title, parts: [] })),
+        };
+        setCourses(prevCourses => [...prevCourses, finalCourseData]);
+        setView('list');
+        setCurrentCourse(null);
+    };
+
     const handleFinishEditing = (finalCourse: Course) => {
         setCurrentCourse(finalCourse);
         setStep(3);
@@ -181,7 +194,7 @@ const App: FC = () => {
             
             {view === 'create' && currentCourse && (
                 <>
-                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} />}
+                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveAndExit={handleSaveAndExit} />}
                     {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} />}
                     {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
@@ -206,7 +219,7 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void }> = ({ course
     </div>
 );
 
-const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void }> = ({ course, onSubmit, onCancel }) => {
+const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveAndExit: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveAndExit }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
     
@@ -226,7 +239,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     };
     
     const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && tagInput.trim() !== '' && data.broadCategories.length < 4) {
+        if (e.key === 'Enter' && tagInput.trim() !== '' && data.broadCategories.length < 10) {
             e.preventDefault();
             const cleanInput = tagInput.trim().toLowerCase();
             const newTag = validTags[cleanInput];
@@ -267,6 +280,11 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         onSubmit(data);
+    };
+
+    const handleSaveAndExit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSaveAndExit(data);
     };
 
     const categoryOptions = [
@@ -316,11 +334,11 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 </div>
             </div>
             <div style={styles.inputGroup}>
-                <label style={styles.label}>Etiquetas (máx. 4)</label>
+                <label style={styles.label}>Etiquetas (máx. 10)</label>
                 <div>
                     {data.broadCategories.map(tag => 
                       <span key={tag} style={styles.tag}>
-                        {tag} <i className="fas fa-times" style={{cursor: 'pointer', marginLeft: '5px'}} onClick={() => removeTag(tag)}></i>
+                        {tag} <i className="fas fa-times" style={{cursor: 'pointer', marginLeft: '5px'}} onClick={() => removeTag(tag)}>
                       </span>
                     )}
                 </div>
@@ -336,17 +354,17 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                         <input style={styles.input} value={mod.title} onChange={e => handleModuleChange(i, e.target.value)} placeholder={`Nombre del Módulo ${i + 1}`} />
                         <input style={styles.input} value={data.learningObjectives[i]} onChange={e => handleObjectiveChange(i, e.target.value)} placeholder={`Objetivo de aprendizaje para el Módulo ${i+1}`} />
                     </div>
-                ))}
+                ))}/Users/ernestomendoza/Course Constructor App/index.tsx
                 {data.modules.length < 6 && <button type="button" style={{...styles.button, ...styles.buttonSecondary, padding:'8px 16px'}} onClick={handleAddModule}><i className="fas fa-plus"></i> Añadir Módulo</button>}
             </div>
             
             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '2rem'}}>
                 <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
+                <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={handleSaveAndExit}>Guardar y Salir</button>
                 <button type="submit" style={styles.button}>Guardar y Continuar <i className="fas fa-arrow-right"></i></button>
             </div>
         </form>
     );
-};
 
 const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = ({ course, onFinish }) => {
     const [currentCourse, setCurrentCourse] = useState(course);
@@ -659,7 +677,9 @@ const GeminiModal: FC<{ onInsert: (content: string) => void, onClose: () => void
     const [error, setError] = useState('');
 
     const predefinedPrompts = [
-        { name: "Quiz de 3 Preguntas", prompt: `Crea un quiz interactivo sobre el tema '{TOPIC}'. El quiz debe tener 3 preguntas de opción múltiple con 3 opciones cada una. Para cada opción, proporciona un feedback explicando por qué es correcta o incorrecta. Responde únicamente con un objeto JSON que siga esta estructura de TypeScript: \`interface QuizQuestion { question: string; options: { text: string; feedback: string; }[]; }[]\`. No incluyas backticks de markdown en tu respuesta.` },
+        { name: "Quiz de 3 Preguntas", prompt: `Crea un quiz interactivo sobre el tema '{TOPIC}'. El quiz debe tener 3 preguntas de opción múltiple con 3 opciones cada una. Para cada opción, proporciona un feedback explicando por qué es correcta o incorrecta. Responde únicamente con un objeto JSON que siga esta estructura de TypeScript: 
+interface QuizQuestion { question: string; options: { text: string; feedback: string; }[]; }[]
+. No incluyas backticks de markdown en tu respuesta.` },
         { name: "Caso Práctico", prompt: "Genera un 'caso práctico' o 'estudio de caso' sobre '{TOPIC}'. Debe presentar una situación realista y terminar con 2 preguntas abiertas que inviten a la reflexión del participante. Responde con código HTML simple usando <p> y <strong>." },
         { name: "Juego de Cartas (Conceptos)", prompt: "Crea un mini juego de cartas sobre '{TOPIC}'. Genera 4 pares de cartas (8 en total). Cada par debe tener un concepto y su definición. Responde con código HTML que use una <div> con la clase 'card-game' y dentro 8 <div> con la clase 'card'." },
         { name: "Metáfora Explicativa", prompt: "Explica el concepto de '{TOPIC}' usando una metáfora o analogía poderosa y fácil de entender. Responde con código HTML usando un <blockquote>." },
