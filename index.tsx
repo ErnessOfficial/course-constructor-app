@@ -338,7 +338,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 <div>
                     {data.broadCategories.map(tag => 
                       <span key={tag} style={styles.tag}>
-                        {tag} <i className="fas fa-times" style={{cursor: 'pointer', marginLeft: '5px'}} onClick={() => removeTag(tag)}>
+                        {tag} <i className="fas fa-times" style={{cursor: 'pointer', marginLeft: '5px'}} onClick={() => removeTag(tag)} />
                       </span>
                     )}
                 </div>
