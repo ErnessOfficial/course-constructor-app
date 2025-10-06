@@ -365,6 +365,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
             </div>
         </form>
     );
+};
 
 const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = ({ course, onFinish }) => {
     const [currentCourse, setCurrentCourse] = useState(course);
