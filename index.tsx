@@ -129,6 +129,19 @@ const App: FC = () => {
         }
     };
 
+    useEffect(() => {
+        // Cargar cursos persistidos
+        try {
+            const raw = localStorage.getItem('courses:v1');
+            if (raw) setCourses(JSON.parse(raw));
+        } catch {}
+    }, []);
+
+    useEffect(() => {
+        // Persistir cursos ante cambios
+        try { localStorage.setItem('courses:v1', JSON.stringify(courses)); } catch {}
+    }, [courses]);
+
     const handleCreateNew = () => {
         setCurrentCourse(JSON.parse(JSON.stringify(initialCourseState)));
         setStep(1);
@@ -138,6 +151,26 @@ const App: FC = () => {
     const handleBackToList = () => {
         setView('list');
         setCurrentCourse(null);
+    };
+
+    const upsertCourse = (courseData: Course) => {
+        const slug = slugify(courseData.title);
+        const id = slug || courseData.id || `curso-${Date.now()}`;
+        const finalCourseData: Course = {
+            ...courseData,
+            id,
+            coverImage: `${slug || 'curso'}_portada.png`,
+        };
+        setCourses(prev => {
+            const idx = prev.findIndex(c => c.id === id);
+            if (idx >= 0) {
+                const next = prev.slice();
+                next[idx] = finalCourseData;
+                return next;
+            }
+            return [...prev, finalCourseData];
+        });
+        return finalCourseData;
     };
 
     const handleFormSubmit = (courseData: Course) => {
@@ -163,6 +196,15 @@ const App: FC = () => {
         setCourses(prevCourses => [...prevCourses, finalCourseData]);
         setView('list');
         setCurrentCourse(null);
+    };
+
+    const handleSaveDraft = (courseData: Course) => {
+        const saved = upsertCourse(courseData);
+        setCurrentCourse(saved);
+    };
+
+    const handleAutoSave = (courseData: Course) => {
+        upsertCourse(courseData);
     };
 
     const handleFinishEditing = (finalCourse: Course) => {
@@ -191,11 +233,19 @@ const App: FC = () => {
                 </div>
             </header>
             
-            {view === 'list' && <CourseList courses={courses} onCreateNew={handleCreateNew} />}
+            {view === 'list' && (
+                <CourseList
+                    courses={courses}
+                    onCreateNew={handleCreateNew}
+                    onEdit={(c) => { setCurrentCourse(JSON.parse(JSON.stringify(c))); setStep(1); setView('create'); }}
+                    onContinue={(c) => { setCurrentCourse(JSON.parse(JSON.stringify(c))); setStep(2); setView('create'); }}
+                    onDelete={(id) => setCourses(prev => prev.filter(c => c.id !== id))}
+                />
+            )}
             
             {view === 'create' && currentCourse && (
                 <>
-                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveAndExit={handleSaveAndExit} />}
+                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveAndExit={handleSaveAndExit} onSaveDraft={handleSaveDraft} onAutoSave={handleAutoSave} />}
                     {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} />}
                     {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
@@ -206,25 +256,51 @@ const App: FC = () => {
 
 // --- SUB-COMPONENTS ---
 
-const CourseList: FC<{ courses: Course[], onCreateNew: () => void }> = ({ courses, onCreateNew }) => (
+const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onEdit: (c: Course) => void, onContinue: (c: Course) => void, onDelete: (id: string) => void }> = ({ courses, onCreateNew, onEdit, onContinue, onDelete }) => (
     <div style={styles.card}>
         <h2 style={styles.h2}>Mis Cursos</h2>
         {courses.length === 0 ? (
             <p>Aún no has creado ningún curso.</p>
         ) : (
-            <ul>{courses.map(c => <li key={c.id}>{c.title}</li>)}</ul>
+            <div style={{ display: 'grid', gap: 8 }}>
+                {courses.map(c => (
+                    <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', border: '1px solid var(--border-color)', borderRadius: 8, padding: '8px 12px' }}>
+                        <div>
+                            <div style={{ fontWeight: 600 }}>{c.title || c.id}</div>
+                            <div style={{ color: 'var(--muted-color)', fontSize: '0.9rem' }}>{c.subtitle || c.category}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button style={{...styles.buttonTiny}} onClick={() => onContinue(c)} title="Acceder / Continuar edición">Acceder</button>
+                            <button style={{...styles.buttonTiny}} onClick={() => onEdit(c)} title="Editar ficha">Editar</button>
+                            <button style={{...styles.buttonTiny, backgroundColor: 'var(--danger-color)'}} onClick={() => onDelete(c.id)} title="Eliminar curso">Borrar</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
         )}
-        <button style={styles.button} onClick={onCreateNew}>
-            <i className="fas fa-plus"></i> Crear Nuevo Curso
-        </button>
+        <div style={{ marginTop: 12 }}>
+            <button style={styles.button} onClick={onCreateNew}>
+                <i className="fas fa-plus"></i> Crear Nuevo Curso
+            </button>
+        </div>
     </div>
 );
 
-const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveAndExit: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveAndExit }) => {
+const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveAndExit: (data: Course) => void, onSaveDraft?: (data: Course) => void, onAutoSave?: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveAndExit, onSaveDraft, onAutoSave }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
     const [genLoading, setGenLoading] = useState<Record<number, boolean>>({});
+    const [genAllLoading, setGenAllLoading] = useState(false);
+    const [autoSaveActive, setAutoSaveActive] = useState(false);
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+
+    useEffect(() => {
+        if (!autoSaveActive || !onAutoSave) return;
+        const id = setInterval(() => {
+            onAutoSave({ ...data });
+        }, 10000);
+        return () => clearInterval(id);
+    }, [autoSaveActive, onAutoSave, data]);
     
     const validTags: Record<string, BroadCategory> = {
       'autoconocimiento': 'Autoconocimiento',
@@ -355,6 +431,59 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 <small style={{ color: 'var(--muted-color)' }}>
                     ¿Quieres ayuda de la IA para redactar los objetivos de cada módulo? Haz clic en el botón de la derecha que aparece junto a cada objetivo. Si el título del módulo está vacío, la IA también podrá sugerir un nombre de módulo basado en el nombre del curso.
                 </small>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '8px 0' }}>
+                    <button type="button" style={styles.buttonTiny} disabled={genAllLoading}
+                        title="Sugerir objetivos (y títulos faltantes) para todos los módulos"
+                        onClick={async () => {
+                            try {
+                                setGenAllLoading(true);
+                                for (let i = 0; i < data.modules.length; i++) {
+                                    const mod = data.modules[i];
+                                    const tituloModulo = (mod.title || '').trim();
+                                    const tituloCurso = (data.title || '').trim() || 'Curso de bienestar emocional';
+                                    const prompt = tituloModulo
+                                      ? `Eres experto en diseño instruccional. Escribe un objetivo de aprendizaje claro, concreto y medible para un módulo de un curso interactivo sobre bienestar emocional. Responde SOLO con una oración breve en español, sin comillas ni adornos. Contexto: Curso: "${tituloCurso}". Módulo: "${tituloModulo}".`
+                                      : `Eres experto en diseño instruccional. Sugiéreme un nombre de módulo y un objetivo de aprendizaje claros, concretos y medibles para un curso interactivo sobre bienestar emocional. Responde SOLO como JSON sin backticks con el formato {"moduleTitle": string, "objective": string} en español. Contexto: Curso: "${tituloCurso}".`;
+                                    try {
+                                        const res = await fetch(`${API_BASE}/api/generate`, {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt })
+                                        });
+                                        if (!res.ok) continue;
+                                        const json = await res.json();
+                                        let payload: string = (json?.text || '').trim();
+                                        let newModuleTitle = '';
+                                        let newObjective = '';
+                                        if (tituloModulo) {
+                                            newObjective = payload.replace(/^\"+|\"+$/g, '').replace(/^'+|'+$/g, '');
+                                        } else {
+                                            const cleaned = payload.replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+                                            try {
+                                                const obj = JSON.parse(cleaned);
+                                                newModuleTitle = String(obj.moduleTitle || '').trim();
+                                                newObjective = String(obj.objective || '').trim();
+                                            } catch {
+                                                newObjective = cleaned;
+                                            }
+                                        }
+                                        setData(prev => {
+                                            const next = { ...prev } as Course;
+                                            const los = [...(next.learningObjectives || [])];
+                                            los[i] = newObjective || los[i] || '';
+                                            if (!tituloModulo && newModuleTitle) {
+                                                const mods = [...next.modules];
+                                                const cur = { ...mods[i], title: newModuleTitle };
+                                                mods[i] = cur;
+                                                return { ...next, learningObjectives: los, modules: mods };
+                                            }
+                                            return { ...next, learningObjectives: los };
+                                        });
+                                    } catch { /* continuar con el siguiente */ }
+                                }
+                            } finally {
+                                setGenAllLoading(false);
+                            }
+                        }}>Sugerir todos</button>
+                </div>
                 {data.modules.map((mod, i) => (
                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
                         <input style={styles.input} value={mod.title} onChange={e => handleModuleChange(i, e.target.value)} placeholder={`Nombre del Módulo ${i + 1}`} />
@@ -362,7 +491,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                         <button
                             type="button"
                             style={styles.buttonTiny}
-                            title="Sugerir objetivo con IA"
+                            title={(mod.title || '').trim() ? 'Sugerir objetivo con IA' : 'Sugerir nombre de módulo y objetivo con IA'}
                             aria-label={`Sugerir objetivo del Módulo ${i + 1} con IA`}
                             onClick={async () => {
                                 try {
@@ -421,10 +550,19 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 {data.modules.length < 6 && <button type="button" style={{...styles.button, ...styles.buttonSecondary, padding:'8px 16px'}} onClick={handleAddModule}><i className="fas fa-plus"></i> Añadir Módulo</button>}
             </div>
             
-            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '2rem'}}>
-                <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
-                <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={handleSaveAndExit}>Guardar y Salir</button>
-                <button type="submit" style={styles.button}>Guardar y Continuar <i className="fas fa-arrow-right"></i></button>
+            <div style={{display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: '2rem', flexWrap: 'wrap'}}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
+                    <button type="button" style={{...styles.button, ...styles.buttonSecondary}}
+                        onClick={() => { if (onSaveDraft) { onSaveDraft({ ...data }); setAutoSaveActive(true); } }}
+                        title="Guardar en la lista y activar autoguardado periódico">
+                        Guardar
+                    </button>
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={handleSaveAndExit}>Guardar y Salir</button>
+                    <button type="submit" style={styles.button}>Guardar y Continuar <i className="fas fa-arrow-right"></i></button>
+                </div>
             </div>
         </form>
     );
