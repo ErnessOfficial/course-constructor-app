@@ -300,7 +300,7 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onEdit: (c: C
                         <div style={{ display: 'flex', gap: 8 }}>
                             <button style={{...styles.buttonTiny}} onClick={() => onContinue(c)} title="Acceder / Continuar edición">Acceder</button>
                             <button style={{...styles.buttonTiny}} onClick={() => onEdit(c)} title="Editar ficha">Editar</button>
-                            <button style={{...styles.buttonTiny, backgroundColor: 'var(--danger-color)'}} onClick={() => onDelete(c.id)} title="Eliminar curso">Borrar</button>
+                            <button style={{...styles.buttonTiny, backgroundColor: 'var(--danger-color)'}} onClick={() => { if (confirm(`¿Seguro que deseas borrar el curso "${c.title || c.id}"? Esta acción no se puede deshacer.`)) { onDelete(c.id); } }} title="Eliminar curso">Borrar</button>
                         </div>
                     </div>
                 ))}
@@ -321,6 +321,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     const [genAllLoading, setGenAllLoading] = useState(false);
     const [autoSaveActive, setAutoSaveActive] = useState(false);
     const [autoSaveMsg, setAutoSaveMsg] = useState('');
+    const [autoSaving, setAutoSaving] = useState(false);
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
     const dataRef = React.useRef(data);
     const autoIntervalRef = React.useRef<number | null>(null);
@@ -332,9 +333,11 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
         if (autoSaveActive && autoIntervalRef.current == null) {
             autoIntervalRef.current = window.setInterval(() => {
                 try {
+                    setAutoSaving(true);
                     onAutoSave({ ...dataRef.current });
                     setAutoSaveMsg('Guardado automáticamente');
                     setTimeout(() => setAutoSaveMsg(''), 1500);
+                    setAutoSaving(false);
                 } catch {}
             }, 5000);
         }
@@ -593,7 +596,12 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                         title="Guardar en la lista y activar autoguardado periódico">
                         Guardar
                     </button>
-                    {autoSaveActive && <span style={{ color: 'var(--muted-color)', alignSelf: 'center' }}>{autoSaveMsg || 'Autoguardado activado'}</span>}
+                    {autoSaveActive && (
+                        <span style={{ color: 'var(--muted-color)', alignSelf: 'center', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {autoSaving ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-check" />}
+                            {autoSaving ? 'Guardando…' : (autoSaveMsg || 'Autoguardado activado')}
+                        </span>
+                    )}
                 </div>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={handleSaveAndExit}>Guardar y Salir</button>
