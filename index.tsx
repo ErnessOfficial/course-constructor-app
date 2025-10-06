@@ -74,6 +74,7 @@ const App: FC = () => {
     const [currentCourse, setCurrentCourse] = useState<Course | null>(null);
     const [step, setStep] = useState(1);
     const [testingAI, setTestingAI] = useState(false);
+    const [toasts, setToasts] = useState<Array<{ id: number; text: string }>>([]);
     const { user, login, logout } = (useKindeAuth() as any) || {};
     const uid = user?.id || user?.sub || user?.email || 'anon';
     const profileKey = `profile:${uid}`;
@@ -229,6 +230,11 @@ const App: FC = () => {
 
     const displayName = (profile.firstName || profile.lastName) ? `${profile.firstName} ${profile.lastName}`.trim() : (user?.name || user?.given_name || user?.email || 'Usuario');
     const avatarUrl = profile.avatarDataUrl || '/images/avatars/default.png';
+    const showToast = (text: string) => {
+        const id = Date.now() + Math.random();
+        setToasts(prev => [...prev, { id, text }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 2200);
+    };
 
     return (
         <div style={styles.appContainer}>
@@ -273,10 +279,21 @@ const App: FC = () => {
             
             {view === 'create' && currentCourse && (
                 <>
-                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveAndExit={handleSaveAndExit} onSaveDraft={handleSaveDraft} onAutoSave={handleAutoSave} />}
+                    {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveAndExit={handleSaveAndExit} onSaveDraft={handleSaveDraft} onAutoSave={handleAutoSave} onToast={showToast} />}
                     {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} />}
                     {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
+            )}
+
+            {/* Toasts */}
+            {!!toasts.length && (
+                <div style={{ position: 'fixed', right: 16, bottom: 16, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 1000 }}>
+                    {toasts.map(t => (
+                        <div key={t.id} style={{ background: 'rgba(0,0,0,0.85)', color: 'white', padding: '8px 12px', borderRadius: 8, boxShadow: 'var(--shadow-md)', maxWidth: 320 }}>
+                            {t.text}
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     );
@@ -314,7 +331,7 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void, onEdit: (c: C
     </div>
 );
 
-const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveAndExit: (data: Course) => void, onSaveDraft?: (data: Course) => void, onAutoSave?: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveAndExit, onSaveDraft, onAutoSave }) => {
+const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveAndExit: (data: Course) => void, onSaveDraft?: (data: Course) => void, onAutoSave?: (data: Course) => void, onToast?: (text: string) => void }> = ({ course, onSubmit, onCancel, onSaveAndExit, onSaveDraft, onAutoSave, onToast }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
     const [genLoading, setGenLoading] = useState<Record<number, boolean>>({});
@@ -324,9 +341,15 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     const [autoSaving, setAutoSaving] = useState(false);
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
     const dataRef = React.useRef(data);
+    const [lastSavedJson, setLastSavedJson] = useState<string>(() => {
+        try { return JSON.stringify(course); } catch { return ''; }
+    });
     const autoIntervalRef = React.useRef<number | null>(null);
 
     useEffect(() => { dataRef.current = data; }, [data]);
+    const isDirty = (() => {
+        try { return JSON.stringify(data) !== lastSavedJson; } catch { return false; }
+    })();
 
     useEffect(() => {
         if (!onAutoSave) return;
@@ -338,6 +361,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                     setAutoSaveMsg('Guardado automáticamente');
                     setTimeout(() => setAutoSaveMsg(''), 1500);
                     setAutoSaving(false);
+                    setLastSavedJson(JSON.stringify(dataRef.current));
                 } catch {}
             }, 5000);
         }
@@ -412,7 +436,20 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     const handleSaveAndExit = (e: React.FormEvent) => {
         e.preventDefault();
         onSaveAndExit(data);
+        try { setLastSavedJson(JSON.stringify(data)); } catch {}
+        onToast?.('Guardado');
     };
+
+    useEffect(() => {
+        const beforeUnload = (ev: BeforeUnloadEvent) => {
+            if (isDirty && !autoSaveActive) {
+                ev.preventDefault();
+                ev.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', beforeUnload);
+        return () => window.removeEventListener('beforeunload', beforeUnload);
+    }, [isDirty, autoSaveActive]);
 
     const categoryOptions = [
         { name: "Autoconciencia & Regulación emocional (núcleo formativo)", icon: "fa-brain" },
@@ -590,9 +627,9 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
             
             <div style={{display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: '2rem', flexWrap: 'wrap'}}>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
+                    <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={() => { if (isDirty && !autoSaveActive) { if (!confirm('Tienes cambios sin guardar. ¿Deseas salir igualmente?')) return; } onCancel(); }}>Cancelar</button>
                     <button type="button" style={{...styles.button, ...styles.buttonSecondary}}
-                        onClick={() => { if (onSaveDraft) { onSaveDraft({ ...data }); setAutoSaveActive(true); setAutoSaveMsg('Guardado'); setTimeout(() => setAutoSaveMsg(''), 1200); } }}
+                        onClick={() => { if (onSaveDraft) { onSaveDraft({ ...data }); setAutoSaveActive(true); setAutoSaveMsg('Guardado'); setTimeout(() => setAutoSaveMsg(''), 1200); onToast?.('Guardado'); try { setLastSavedJson(JSON.stringify(data)); } catch {} } }}
                         title="Guardar en la lista y activar autoguardado periódico">
                         Guardar
                     </button>
