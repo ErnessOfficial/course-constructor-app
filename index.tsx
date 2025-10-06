@@ -353,7 +353,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
             <div style={styles.inputGroup}>
                 <label style={styles.label}>Módulos y Objetivos de Aprendizaje</label>
                 <small style={{ color: 'var(--muted-color)' }}>
-                    ¿Quieres ayuda de la IA para redactar los objetivos de cada módulo? Haz clic en el botón de la derecha que aparece junto a cada objetivo.
+                    ¿Quieres ayuda de la IA para redactar los objetivos de cada módulo? Haz clic en el botón de la derecha que aparece junto a cada objetivo. Si el título del módulo está vacío, la IA también podrá sugerir un nombre de módulo basado en el nombre del curso.
                 </small>
                 {data.modules.map((mod, i) => (
                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
@@ -367,8 +367,11 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                             onClick={async () => {
                                 try {
                                     setGenLoading(prev => ({ ...prev, [i]: true }));
-                                    const titulo = (mod.title || '').trim() || `Módulo ${i + 1}`;
-                                    const prompt = `Eres un experto en diseño instruccional. Escribe un objetivo de aprendizaje claro, concreto y medible para un módulo de un curso interactivo enfocado en el bienestar emocional. Responde con una sola oración breve en español, sin comillas ni adornos. Módulo: "${titulo}".`;
+                                    const tituloModulo = (mod.title || '').trim();
+                                    const tituloCurso = (data.title || '').trim() || 'Curso de bienestar emocional';
+                                    const prompt = tituloModulo
+                                      ? `Eres experto en diseño instruccional. Escribe un objetivo de aprendizaje claro, concreto y medible para un módulo de un curso interactivo sobre bienestar emocional. Responde SOLO con una oración breve en español, sin comillas ni adornos. Contexto: Curso: "${tituloCurso}". Módulo: "${tituloModulo}".`
+                                      : `Eres experto en diseño instruccional. Sugiéreme un nombre de módulo y un objetivo de aprendizaje claros, concretos y medibles para un curso interactivo sobre bienestar emocional. Responde SOLO como JSON sin backticks con el formato {"moduleTitle": string, "objective": string} en español. Contexto: Curso: "${tituloCurso}".`;
                                     const res = await fetch(`${API_BASE}/api/generate`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
@@ -376,13 +379,32 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                                     });
                                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                                     const json = await res.json();
-                                    let texto: string = (json?.text || '').trim();
-                                    texto = texto.replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+                                    let payload: string = (json?.text || '').trim();
+                                    let newModuleTitle = '';
+                                    let newObjective = '';
+                                    if (tituloModulo) {
+                                      newObjective = payload.replace(/^\"+|\"+$/g, '').replace(/^'+|'+$/g, '');
+                                    } else {
+                                      const cleaned = payload.replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+                                      try {
+                                        const obj = JSON.parse(cleaned);
+                                        newModuleTitle = String(obj.moduleTitle || '').trim();
+                                        newObjective = String(obj.objective || '').trim();
+                                      } catch {
+                                        newObjective = cleaned;
+                                      }
+                                    }
                                     setData(prev => {
-                                        const next = { ...prev } as Course;
-                                        const los = [...(next.learningObjectives || [])];
-                                        los[i] = texto || los[i] || '';
-                                        return { ...next, learningObjectives: los };
+                                      const next = { ...prev } as Course;
+                                      const los = [...(next.learningObjectives || [])];
+                                      los[i] = newObjective || los[i] || '';
+                                      if (!tituloModulo && newModuleTitle) {
+                                        const mods = [...next.modules];
+                                        const cur = { ...mods[i], title: newModuleTitle };
+                                        mods[i] = cur;
+                                        return { ...next, learningObjectives: los, modules: mods };
+                                      }
+                                      return { ...next, learningObjectives: los };
                                     });
                                 } catch (e: any) {
                                     alert(`No se pudo generar el objetivo: ${e?.message || e}`);
