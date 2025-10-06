@@ -30,6 +30,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     buttonSecondary: { backgroundColor: '#6c757d', color: 'white' },
     buttonDanger: { backgroundColor: 'var(--danger-color)', color: 'white' },
     buttonAi: { backgroundColor: '#8a42e2', color: 'white'},
+    buttonTiny: { backgroundColor: 'var(--secondary-color)', color: 'white', border: 'none', padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 },
     card: { backgroundColor: 'var(--surface-color)', borderRadius: 'var(--border-radius)', padding: '2rem', boxShadow: 'var(--shadow-md)', marginBottom: '1.5rem' },
     inputGroup: { marginBottom: '1.5rem' },
     label: { display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-color)' },
@@ -222,6 +223,8 @@ const CourseList: FC<{ courses: Course[], onCreateNew: () => void }> = ({ course
 const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCancel: () => void, onSaveAndExit: (data: Course) => void }> = ({ course, onSubmit, onCancel, onSaveAndExit }) => {
     const [data, setData] = useState(course);
     const [tagInput, setTagInput] = useState('');
+    const [genLoading, setGenLoading] = useState<Record<number, boolean>>({});
+    const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
     
     const validTags: Record<string, BroadCategory> = {
       'autoconocimiento': 'Autoconocimiento',
@@ -349,10 +352,48 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
             </div>
             <div style={styles.inputGroup}>
                 <label style={styles.label}>Módulos y Objetivos de Aprendizaje</label>
+                <small style={{ color: 'var(--muted-color)' }}>
+                    ¿Quieres ayuda de la IA para redactar los objetivos de cada módulo? Haz clic en el botón de la derecha que aparece junto a cada objetivo.
+                </small>
                 {data.modules.map((mod, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
                         <input style={styles.input} value={mod.title} onChange={e => handleModuleChange(i, e.target.value)} placeholder={`Nombre del Módulo ${i + 1}`} />
                         <input style={styles.input} value={data.learningObjectives[i]} onChange={e => handleObjectiveChange(i, e.target.value)} placeholder={`Objetivo de aprendizaje para el Módulo ${i+1}`} />
+                        <button
+                            type="button"
+                            style={styles.buttonTiny}
+                            title="Sugerir objetivo con IA"
+                            aria-label={`Sugerir objetivo del Módulo ${i + 1} con IA`}
+                            onClick={async () => {
+                                try {
+                                    setGenLoading(prev => ({ ...prev, [i]: true }));
+                                    const titulo = (mod.title || '').trim() || `Módulo ${i + 1}`;
+                                    const prompt = `Eres un experto en diseño instruccional. Escribe un objetivo de aprendizaje claro, concreto y medible para un módulo de un curso interactivo enfocado en el bienestar emocional. Responde con una sola oración breve en español, sin comillas ni adornos. Módulo: "${titulo}".`;
+                                    const res = await fetch(`${API_BASE}/api/generate`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ prompt })
+                                    });
+                                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                    const json = await res.json();
+                                    let texto: string = (json?.text || '').trim();
+                                    texto = texto.replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+                                    setData(prev => {
+                                        const next = { ...prev } as Course;
+                                        const los = [...(next.learningObjectives || [])];
+                                        los[i] = texto || los[i] || '';
+                                        return { ...next, learningObjectives: los };
+                                    });
+                                } catch (e: any) {
+                                    alert(`No se pudo generar el objetivo: ${e?.message || e}`);
+                                } finally {
+                                    setGenLoading(prev => ({ ...prev, [i]: false }));
+                                }
+                            }}
+                            disabled={!!genLoading[i]}
+                        >
+                            {genLoading[i] ? '...' : 'IA'}
+                        </button>
                     </div>
                 ))}
                 {data.modules.length < 6 && <button type="button" style={{...styles.button, ...styles.buttonSecondary, padding:'8px 16px'}} onClick={handleAddModule}><i className="fas fa-plus"></i> Añadir Módulo</button>}
