@@ -967,9 +967,11 @@ const KindeWrappedApp: FC = () => {
   const clientId = (import.meta as any).env?.VITE_KINDE_CLIENT_ID || '499609149459408789fc958770cd4375';
   const redirectUri = (import.meta as any).env?.VITE_KINDE_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
   const logoutUri = (import.meta as any).env?.VITE_KINDE_LOGOUT_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+  const scope = (import.meta as any).env?.VITE_KINDE_SCOPE || 'openid profile email';
+  const audience = (import.meta as any).env?.VITE_KINDE_AUDIENCE || '';
 
   return (
-    <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri}>
+    <KindeProvider domain={domain} clientId={clientId} redirectUri={redirectUri} logoutUri={logoutUri} scope={scope} audience={audience}>
       <AuthGate>
         <App />
       </AuthGate>
