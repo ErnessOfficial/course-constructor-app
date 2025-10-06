@@ -74,6 +74,12 @@ const App: FC = () => {
     const [currentCourse, setCurrentCourse] = useState<Course | null>(null);
     const [step, setStep] = useState(1);
     const [testingAI, setTestingAI] = useState(false);
+    const { user, login, logout } = (useKindeAuth() as any) || {};
+    const uid = user?.id || user?.sub || user?.email || 'anon';
+    const profileKey = `profile:${uid}`;
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [profileModalOpen, setProfileModalOpen] = useState(false);
+    const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
 
     const IS_GH_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
@@ -98,6 +104,15 @@ const App: FC = () => {
         probe();
         return () => { cancelled = true; };
     }, [API_BASE, IS_GH_PAGES]);
+
+    useEffect(() => {
+        // Cargar perfil
+        try {
+            const raw = localStorage.getItem(profileKey);
+            if (raw) setProfile(JSON.parse(raw));
+        } catch {}
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profileKey]);
 
     const handleTestAI = async () => {
         try {
@@ -212,25 +227,38 @@ const App: FC = () => {
         setStep(3);
     };
 
+    const displayName = (profile.firstName || profile.lastName) ? `${profile.firstName} ${profile.lastName}`.trim() : (user?.name || user?.given_name || user?.email || 'Usuario');
+    const avatarUrl = profile.avatarDataUrl || '/images/avatars/default.png';
+
     return (
         <div style={styles.appContainer}>
-            <header style={styles.header}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                    <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxHeight: 56, height: '56px', width: 'auto' }} />
-                    <p style={styles.mutedColor}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+            <header style={{ ...styles.header, borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <img src="/logo_animikoding.png" alt="AnImiKoding" style={{ maxHeight: 80, height: '80px', width: 'auto' }} />
+                        <p style={{ ...styles.mutedColor, margin: 0 }}>Diseña cursos de bienestar emocional con asistencia de IA</p>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                        <button type="button" onClick={() => setSettingsOpen(s => !s)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: '1px solid var(--border-color)', borderRadius: 20, padding: '4px 10px', cursor: 'pointer' }}>
+                            <img src={avatarUrl} alt="avatar" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+                            <span style={{ fontSize: '0.9rem' }}>{displayName}</span>
+                            <i className="fas fa-cog" />
+                        </button>
+                        {settingsOpen && (
+                            <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid var(--border-color)', borderRadius: 8, boxShadow: 'var(--shadow-md)', minWidth: 240, zIndex: 10 }}>
+                                <button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => { setProfileModalOpen(true); setSettingsOpen(false); }}>Editar perfil</button>
+                                <button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} disabled={testingAI || !aiAvailable} onClick={() => { setSettingsOpen(false); handleTestAI(); }}>{testingAI ? 'Probando IA…' : 'Probar IA'}</button>
+                                <button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => { setSettingsOpen(false); login?.(); }}>Cambiar de cuenta</button>
+                                <button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => { setSettingsOpen(false); logout?.(); }}>Cerrar sesión</button>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 {IS_GH_PAGES && !API_BASE && (
                     <p style={{color: '#dc3545', marginTop: '0.5rem'}}>
                         Atención: Estás en GitHub Pages sin backend configurado. Define el secret <code>VITE_API_BASE</code> con la URL de tu backend o usa el despliegue en Vercel.
                     </p>
                 )}
-                <div style={{ marginTop: '0.75rem' }}>
-                    <button style={{...styles.button, ...styles.buttonAi}}
-                            onClick={handleTestAI}
-                            disabled={testingAI || !aiAvailable}>
-                        {testingAI ? 'Probando conexión...' : (aiAvailable ? 'Probar conexión a IA' : 'IA no disponible (configura backend)')}
-                    </button>
-                </div>
             </header>
             
             {view === 'list' && (
@@ -292,15 +320,32 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     const [genLoading, setGenLoading] = useState<Record<number, boolean>>({});
     const [genAllLoading, setGenAllLoading] = useState(false);
     const [autoSaveActive, setAutoSaveActive] = useState(false);
+    const [autoSaveMsg, setAutoSaveMsg] = useState('');
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+    const dataRef = React.useRef(data);
+    const autoIntervalRef = React.useRef<number | null>(null);
+
+    useEffect(() => { dataRef.current = data; }, [data]);
 
     useEffect(() => {
-        if (!autoSaveActive || !onAutoSave) return;
-        const id = setInterval(() => {
-            onAutoSave({ ...data });
-        }, 10000);
-        return () => clearInterval(id);
-    }, [autoSaveActive, onAutoSave, data]);
+        if (!onAutoSave) return;
+        if (autoSaveActive && autoIntervalRef.current == null) {
+            autoIntervalRef.current = window.setInterval(() => {
+                try {
+                    onAutoSave({ ...dataRef.current });
+                    setAutoSaveMsg('Guardado automáticamente');
+                    setTimeout(() => setAutoSaveMsg(''), 1500);
+                } catch {}
+            }, 5000);
+        }
+        if (!autoSaveActive && autoIntervalRef.current != null) {
+            clearInterval(autoIntervalRef.current);
+            autoIntervalRef.current = null;
+        }
+        return () => {
+            if (autoIntervalRef.current != null) { clearInterval(autoIntervalRef.current); autoIntervalRef.current = null; }
+        };
+    }, [autoSaveActive, onAutoSave]);
     
     const validTags: Record<string, BroadCategory> = {
       'autoconocimiento': 'Autoconocimiento',
@@ -432,53 +477,43 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                     ¿Quieres ayuda de la IA para redactar los objetivos de cada módulo? Haz clic en el botón de la derecha que aparece junto a cada objetivo. Si el título del módulo está vacío, la IA también podrá sugerir un nombre de módulo basado en el nombre del curso.
                 </small>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '8px 0' }}>
-                    <button type="button" style={styles.buttonTiny} disabled={genAllLoading}
-                        title="Sugerir objetivos (y títulos faltantes) para todos los módulos"
+                        <button type="button" style={styles.buttonTiny} disabled={genAllLoading}
+                        title="Generar 4 módulos con objetivos a partir del título del curso"
                         onClick={async () => {
                             try {
                                 setGenAllLoading(true);
-                                for (let i = 0; i < data.modules.length; i++) {
-                                    const mod = data.modules[i];
-                                    const tituloModulo = (mod.title || '').trim();
-                                    const tituloCurso = (data.title || '').trim() || 'Curso de bienestar emocional';
-                                    const prompt = tituloModulo
-                                      ? `Eres experto en diseño instruccional. Escribe un objetivo de aprendizaje claro, concreto y medible para un módulo de un curso interactivo sobre bienestar emocional. Responde SOLO con una oración breve en español, sin comillas ni adornos. Contexto: Curso: "${tituloCurso}". Módulo: "${tituloModulo}".`
-                                      : `Eres experto en diseño instruccional. Sugiéreme un nombre de módulo y un objetivo de aprendizaje claros, concretos y medibles para un curso interactivo sobre bienestar emocional. Responde SOLO como JSON sin backticks con el formato {"moduleTitle": string, "objective": string} en español. Contexto: Curso: "${tituloCurso}".`;
-                                    try {
-                                        const res = await fetch(`${API_BASE}/api/generate`, {
-                                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt })
-                                        });
-                                        if (!res.ok) continue;
-                                        const json = await res.json();
-                                        let payload: string = (json?.text || '').trim();
-                                        let newModuleTitle = '';
-                                        let newObjective = '';
-                                        if (tituloModulo) {
-                                            newObjective = payload.replace(/^\"+|\"+$/g, '').replace(/^'+|'+$/g, '');
-                                        } else {
-                                            const cleaned = payload.replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
-                                            try {
-                                                const obj = JSON.parse(cleaned);
-                                                newModuleTitle = String(obj.moduleTitle || '').trim();
-                                                newObjective = String(obj.objective || '').trim();
-                                            } catch {
-                                                newObjective = cleaned;
-                                            }
-                                        }
-                                        setData(prev => {
-                                            const next = { ...prev } as Course;
-                                            const los = [...(next.learningObjectives || [])];
-                                            los[i] = newObjective || los[i] || '';
-                                            if (!tituloModulo && newModuleTitle) {
-                                                const mods = [...next.modules];
-                                                const cur = { ...mods[i], title: newModuleTitle };
-                                                mods[i] = cur;
-                                                return { ...next, learningObjectives: los, modules: mods };
-                                            }
-                                            return { ...next, learningObjectives: los };
-                                        });
-                                    } catch { /* continuar con el siguiente */ }
+                                const tituloCurso = (data.title || '').trim() || 'Curso de bienestar emocional';
+                                const subt = (data.subtitle || '').trim();
+                                const tituloCompleto = subt ? `${tituloCurso}: ${subt}` : tituloCurso;
+                                const prompt = `Actúa como un Diseñador Curricular Senior y experto en la creación de microcursos online con la metodología de Aprendizaje Reflexivo-Emocional.\n\nTu tarea es la siguiente:\n\n1.  Analiza el título del microcurso que te proporcionaré.\n2.  Define la estructura completa del curso, dividiéndolo en 4 módulos (no más, no menos).\n3.  Genera un título creativo y descriptivo para cada uno de los 4 módulos, asegurándote de que los títulos cubran progresivamente el tema central.\n4.  Para cada módulo, redacta un objetivo de aprendizaje único.\n\nReglas Cruciales para los Objetivos:\n\n* Deben ser breves, concisos y reflejar el enfoque reflexivo/emocional del aprendizaje.\n* Deben estar redactados en segunda persona del singular (dirigidos directamente al participante, usando 'podrás', 'conocerás', 'lograrás', 'identificarás', etc.).\n* EVITA la repetición de verbos y estructuras gramaticales entre los 4 objetivos. Cada objetivo debe sonar fresco y diferente al anterior, aunque todos sean coherentes con el contexto del módulo.\n\nTítulo del Microcurso: "${tituloCompleto}"\n\n---\nFormato de Salida Requerido:\n\nMÓDULO 1: [Título del Módulo 1]\nObjetivo: [Objetivo Único y Directo]\n\nMÓDULO 2: [Título del Módulo 2]\nObjetivo: [Objetivo Único y Directo]\n\nMÓDULO 3: [Título del Módulo 3]\nObjetivo: [Objetivo Único y Directo]\n\nMÓDULO 4: [Título del Módulo 4]\nObjetivo: [Objetivo Único y Directo]`;
+                                const res = await fetch(`${API_BASE}/api/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                const json = await res.json();
+                                const text: string = String(json?.text || '');
+                                // limpiar fences y parsear bloques
+                                const cleaned = text.replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g,''));
+                                const re = /(M[ÓO]DULO)\s*(\d)\s*:\s*([^\n\r]+)[\s\S]*?Objetivo\s*:\s*([^\n\r]+)/gi;
+                                const mods: { n: number, title: string, objective: string }[] = [];
+                                let m: RegExpExecArray | null;
+                                while ((m = re.exec(cleaned))) {
+                                    const n = parseInt(m[2], 10);
+                                    const title = m[3].trim();
+                                    const objective = m[4].trim();
+                                    if (n >= 1 && n <= 4) mods.push({ n, title, objective });
                                 }
+                                if (mods.length >= 1) {
+                                    mods.sort((a,b) => a.n - b.n);
+                                    setData(prev => {
+                                        const next = { ...prev } as Course;
+                                        next.modules = mods.slice(0,4).map((x, i) => ({ id: `m${i+1}`, title: x.title, parts: [] }));
+                                        next.learningObjectives = mods.slice(0,4).map(x => x.objective);
+                                        return next;
+                                    });
+                                } else {
+                                    alert('No se pudo interpretar la respuesta. Intenta nuevamente.');
+                                }
+                            } catch (e: any) {
+                                alert(`Error generando módulos y objetivos: ${e?.message || e}`);
                             } finally {
                                 setGenAllLoading(false);
                             }
@@ -499,7 +534,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                                     const tituloModulo = (mod.title || '').trim();
                                     const tituloCurso = (data.title || '').trim() || 'Curso de bienestar emocional';
                                     const prompt = tituloModulo
-                                      ? `Eres experto en diseño instruccional. Escribe un objetivo de aprendizaje claro, concreto y medible para un módulo de un curso interactivo sobre bienestar emocional. Responde SOLO con una oración breve en español, sin comillas ni adornos. Contexto: Curso: "${tituloCurso}". Módulo: "${tituloModulo}".`
+                                      ? `Actúa como un diseñador instruccional experto en la metodología de aprendizaje reflexivo-emocional.\n\nTu tarea es generar un objetivo de aprendizaje breve, adecuado y conciso para el módulo de un curso online interactivo, basándote únicamente en el título del módulo que te proporcionaré.\n\nEl objetivo debe estar redactado en segunda persona del singular (dirigido directamente al participante, usando 'podrás', 'conocerás', 'lograrás', 'identificarás', etc.), manteniendo un tono directo y motivador.\n\nCrucial: El objetivo debe reflejar la naturaleza emocional y/o reflexiva del aprendizaje. Asegúrate de que la redacción y los verbos utilizados sean siempre diferentes a los de otros objetivos, para evitar la repetición en series de módulos.\n\nTítulo del Módulo: "${tituloModulo}"`
                                       : `Eres experto en diseño instruccional. Sugiéreme un nombre de módulo y un objetivo de aprendizaje claros, concretos y medibles para un curso interactivo sobre bienestar emocional. Responde SOLO como JSON sin backticks con el formato {"moduleTitle": string, "objective": string} en español. Contexto: Curso: "${tituloCurso}".`;
                                     const res = await fetch(`${API_BASE}/api/generate`, {
                                         method: 'POST',
@@ -554,10 +589,11 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={onCancel}>Cancelar</button>
                     <button type="button" style={{...styles.button, ...styles.buttonSecondary}}
-                        onClick={() => { if (onSaveDraft) { onSaveDraft({ ...data }); setAutoSaveActive(true); } }}
+                        onClick={() => { if (onSaveDraft) { onSaveDraft({ ...data }); setAutoSaveActive(true); setAutoSaveMsg('Guardado'); setTimeout(() => setAutoSaveMsg(''), 1200); } }}
                         title="Guardar en la lista y activar autoguardado periódico">
                         Guardar
                     </button>
+                    {autoSaveActive && <span style={{ color: 'var(--muted-color)', alignSelf: 'center' }}>{autoSaveMsg || 'Autoguardado activado'}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <button type="button" style={{...styles.button, ...styles.buttonSecondary}} onClick={handleSaveAndExit}>Guardar y Salir</button>
