@@ -198,7 +198,7 @@ const App: FC = () => {
             ...courseData,
             id: slug || `curso-${Date.now()}`,
             coverImage: `${slug || 'curso'}_portada.png`,
-            modules: courseData.modules.map((m, i) => ({ id: `m${i + 1}`, title: m.title, parts: [] })),
+            modules: courseData.modules.map((m, i) => ({ id: m.id || `m${i + 1}`, title: m.title, parts: (m as any).parts || [] })),
         };
         setCurrentCourse(finalCourseData);
         setStep(2);
@@ -210,9 +210,9 @@ const App: FC = () => {
             ...courseData,
             id: slug || `curso-${Date.now()}`,
             coverImage: `${slug || 'curso'}_portada.png`,
-            modules: courseData.modules.map((m, i) => ({ id: `m${i + 1}`, title: m.title, parts: [] })),
+            modules: courseData.modules.map((m, i) => ({ id: m.id || `m${i + 1}`, title: m.title, parts: (m as any).parts || [] })),
         };
-        setCourses(prevCourses => [...prevCourses, finalCourseData]);
+        upsertCourse(finalCourseData);
         setView('list');
         setCurrentCourse(null);
     };
