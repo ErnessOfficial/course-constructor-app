@@ -355,6 +355,7 @@ const App: FC = () => {
                                             { id: 'help-ficha', text: 'ficha del curso Completa Título, Subtítulo y Descripción Categoría Etiquetas Módulos Objetivos IA Sugerir todos Guardar Guardar y Continuar Guardar y Salir' },
                                             { id: 'help-contenidos', text: 'contenidos del curso Partes Recursos editor texto reordenar guardar volver ficha' },
                                             { id: 'help-export', text: 'generación exportación código ts assets descargar' },
+                                            { id: 'help-quiz', text: 'quiz tipos diagnóstico formativo sumativo trivia habilidades verdadero falso feedback' },
                                             { id: 'help-ia', text: 'consejos IA prompts segunda persona reflexivo emocional' }
                                         ];
                                         const found = order.find(s => s.text.toLowerCase().includes(term));
@@ -377,7 +378,8 @@ const App: FC = () => {
                                     <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-ficha')?.scrollIntoView({ behavior: 'smooth' })}>2. Ficha del curso</button></li>
                                     <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-contenidos')?.scrollIntoView({ behavior: 'smooth' })}>3. Contenidos del curso</button></li>
                                     <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-export')?.scrollIntoView({ behavior: 'smooth' })}>4. Generación y exportación</button></li>
-                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-ia')?.scrollIntoView({ behavior: 'smooth' })}>5. Consejos para IA</button></li>
+                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-quiz')?.scrollIntoView({ behavior: 'smooth' })}>5. Quiz</button></li>
+                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-ia')?.scrollIntoView({ behavior: 'smooth' })}>6. Consejos para IA</button></li>
                                 </ul>
                             </nav>
 
@@ -407,7 +409,20 @@ const App: FC = () => {
                                 <ul>
                                 <li>Al finalizar, la vista de “Curso Generado” muestra el código .ts y los assets requeridos. Puedes descargar el archivo.</li>
                                 </ul>
-                                <h4 id="help-ia">5. Consejos para IA</h4>
+                                <h4 id="help-quiz">5. Quiz</h4>
+                                <p>Tipos de quiz más comunes y usos sugeridos:</p>
+                                <ul>
+                                    <li><strong>Diagnóstico</strong>: mide conocimientos o estado inicial (ej. autoestima, estrés).</li>
+                                    <li><strong>Formativo</strong>: refuerza el aprendizaje durante el curso con feedback inmediato.</li>
+                                    <li><strong>Sumativo</strong>: evalúa resultados finales tras completar los módulos.</li>
+                                    <li><strong>Trivia</strong>: preguntas rápidas para recordar conceptos clave.</li>
+                                    <li><strong>Habilidades</strong>: enfocado en prácticas o toma de decisiones, con feedback específico.</li>
+                                    <li><strong>Verdadero o falso</strong>: simple y útil para comprobación rápida.</li>
+                                    <li><strong>Feedback</strong>: incluya retroalimentación por opción para potenciar el aprendizaje reflexivo.</li>
+                                </ul>
+                                <p>Al crear un quiz, define: tema, finalidad (diagnóstico, formativo, etc.), y número de preguntas. Luego usa “Generar Quiz con IA” dentro del recurso para obtener preguntas con feedback.</p>
+
+                                <h4 id="help-ia">6. Consejos para IA</h4>
                                 <ul>
                                 <li>En los prompts, describe claramente el objetivo, el tono y la audiencia.</li>
                                 <li>Para “Sugerir todos”, asegúrate de que el título y el subtítulo del curso reflejen el alcance completo.</li>
@@ -1023,10 +1038,45 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
     const handleChange = (field: string, value: any) => {
         onChange({ ...activity, [field]: value });
     };
+    const [quizQCount, setQuizQCount] = useState<string>('');
+    const [quizLoading, setQuizLoading] = useState(false);
+    const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+
+    const generateQuizNow = async () => {
+        try {
+            setQuizLoading(true);
+            const tema = (activity.title || '').trim();
+            const desc = (activity as any).description || '';
+            const n = Number(quizQCount) || 0;
+            const num = n > 0 ? n : (Array.isArray((activity as any).questions) ? (activity as any).questions.length || 5 : 5);
+            const prompt = `Actúa como un diseñador instruccional experto. Genera un quiz interactivo en español, con retroalimentación por opción, basado en la siguiente configuración del usuario. Devuelve únicamente un arreglo JSON válido, sin backticks ni texto adicional, con este tipo: { question: string; options: { text: string; feedback: string; }[]; }[].\n\nConfiguración del usuario:\n- Tema/Título de la actividad: "${tema}"\n- Descripción / finalidad / tipo: "${desc}"\n- Número de preguntas: ${num}\n\nReglas:\n- Cada pregunta debe tener 3 o 4 opciones con feedback específico.\n- Las redacciones deben ser claras, en segunda persona cuando aplique, y enfocadas al aprendizaje reflexivo-emocional.\n- No incluyas HTML en las respuestas; sólo JSON del arreglo de preguntas.`;
+            const res = await fetch(`${API_BASE}/api/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            const payload = String(json?.text || '').replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+            let questions: any = [];
+            try { questions = JSON.parse(payload); } catch { throw new Error('La IA no devolvió JSON válido'); }
+            if (!Array.isArray(questions) || questions.length === 0) throw new Error('No se encontraron preguntas en la respuesta');
+            handleChange('questions', questions);
+            alert('Quiz generado con éxito. Puedes revisar y ajustar las preguntas.');
+        } catch (e: any) {
+            alert(`Error generando el quiz: ${e?.message || e}`);
+        } finally {
+            setQuizLoading(false);
+        }
+    };
 
     return (
         <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)', padding: '1.5rem', marginBottom: '1rem' }}>
             <input style={{...styles.input, fontWeight: 'bold', marginBottom: '1rem'}} value={activity.title} onChange={e => handleChange('title', e.target.value)} />
+            {activity.type === 'quiz' && (
+                <div style={{ marginBottom: '0.5rem', color: 'var(--muted-color)', fontSize: '0.95rem' }}>
+                    Describe sobre qué tema quieres el quiz, cuál es la finalidad o el tipo de quiz, y el número aproximado de preguntas. Ejemplos:<br />
+                    - “Un quiz sobre el autocuidado emocional para medir habilidades del participante, 5 preguntas.”<br />
+                    - “Un quiz diagnóstico sobre niveles de autoestima, 8 preguntas.”<br />
+                    Para conocer más sobre tipos de quiz, consulta la sección “Quiz” en el módulo de ayuda.
+                </div>
+            )}
             <textarea style={{...styles.textarea, minHeight: '60px', marginBottom: '1rem'}} value={activity.description} onChange={e => handleChange('description', e.target.value)} />
 
             {activity.type === 'text' && (
@@ -1052,8 +1102,14 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
             )}
             {activity.type === 'quiz' && (
                 <div>
-                    <p><strong>Preguntas:</strong> {activity.questions.length}</p>
-                    <button style={{...styles.button, ...styles.buttonAi}} onClick={onGenerateWithAI}><i className="fas fa-magic"></i> Generar Quiz con IA</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        <strong>Preguntas:</strong> <span>{Array.isArray(activity.questions) ? activity.questions.length : 0}</span>
+                        <label style={{ marginLeft: 12 }}>N° objetivo:</label>
+                        <input type="number" min={1} max={20} value={quizQCount} onChange={e => setQuizQCount(e.target.value)} style={{ width: 80, ...styles.input, padding: '6px 8px' }} />
+                    </div>
+                    <button style={{...styles.button, ...styles.buttonAi}} onClick={generateQuizNow} disabled={quizLoading}>
+                        <i className="fas fa-magic"></i> {quizLoading ? 'Generando…' : 'Generar Quiz con IA'}
+                    </button>
                 </div>
             )}
         </div>
