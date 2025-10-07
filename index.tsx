@@ -1065,6 +1065,8 @@ const toolbarButtonStyle: React.CSSProperties = { padding: '6px 10px', border: '
 
 const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => void }> = ({ valueHTML, onChangeHTML }) => {
     const editorRef = React.useRef<HTMLDivElement | null>(null);
+    const [showHtmlEditor, setShowHtmlEditor] = useState(false);
+    const [htmlSource, setHtmlSource] = useState('');
 
     useEffect(() => {
         // Solo escribe el valor inicial o cuando cambia externamente
@@ -1144,6 +1146,40 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
         syncHtml();
     };
 
+    const openHtmlEditor = () => {
+        const node = editorRef.current;
+        if (!node) return;
+        setHtmlSource(node.innerHTML);
+        setShowHtmlEditor(true);
+    };
+
+    const applyHtmlSource = () => {
+        const node = editorRef.current;
+        if (!node) return;
+        node.innerHTML = htmlSource;
+        setShowHtmlEditor(false);
+        syncHtml();
+    };
+
+    const cleanHtmlSource = () => {
+        let src = htmlSource;
+        // eliminar scripts y comentarios
+        src = src.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+        src = src.replace(/<!--([\s\S]*?)-->/g, '');
+        // eliminar atributos style y class para limpiar estilos incrustados
+        src = src.replace(/\sstyle="[^"]*"/gi, '');
+        src = src.replace(/\sclass="[^"]*"/gi, '');
+        // quitar spans y fonts manteniendo el contenido
+        src = src.replace(/<\s*font[^>]*>/gi, '').replace(/<\s*\/\s*font\s*>/gi, '');
+        src = src.replace(/<\s*span[^>]*>/gi, '').replace(/<\s*\/\s*span\s*>/gi, '');
+        // colapsar múltiples espacios y saltos de línea innecesarios
+        src = src.replace(/\u00A0/g, ' ');
+        src = src.replace(/\s{2,}/g, ' ');
+        // eliminar etiquetas vacías comunes (p/div/strong/em) conservando <br>
+        src = src.replace(/<(p|div|strong|em|b|i|u)>\s*<\/\1>/gi, '');
+        setHtmlSource(src.trim());
+    };
+
     const setBlock = (block: 'H1' | 'H2' | 'H3' | 'P') => {
         document.execCommand('formatBlock', false, block);
         // Ajustes de estilo mínimos acorde a la app
@@ -1207,6 +1243,8 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 <div style={{ width: 1, background: 'var(--border-color)' }} />
                 <button type="button" title="Pegar sin formato" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={pastePlain}><i className="fas fa-clipboard"></i> Pegado plano</button>
                 <button type="button" title="Borrar formato" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={removeFormatting}><i className="fas fa-eraser"></i></button>
+                <div style={{ width: 1, background: 'var(--border-color)' }} />
+                <button type="button" title="Ver/Editar HTML" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={openHtmlEditor}><i className="fas fa-code"></i> Ver HTML</button>
             </div>
             <div
                 ref={editorRef}
@@ -1232,6 +1270,19 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                     overflowX: 'auto'
                 }}
             />
+            {showHtmlEditor && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }} onClick={() => setShowHtmlEditor(false)}>
+                    <div style={{ background: 'white', borderRadius: 12, padding: 16, width: 'min(860px, 96vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+                        <h4 style={{ margin: '4px 0 8px 0' }}>HTML del contenido</h4>
+                        <textarea style={{ ...styles.textarea, flex: 1, minHeight: 260, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontSize: 12 }} value={htmlSource} onChange={e => setHtmlSource(e.target.value)} />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                            <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={() => setShowHtmlEditor(false)}>Cancelar</button>
+                            <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={cleanHtmlSource} title="Eliminar estilos y etiquetas no esenciales">Limpiar</button>
+                            <button style={styles.button} onClick={applyHtmlSource}>Aplicar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
