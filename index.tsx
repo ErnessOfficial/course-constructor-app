@@ -81,6 +81,8 @@ const App: FC = () => {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [profileModalOpen, setProfileModalOpen] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
+    const [helpSearch, setHelpSearch] = useState('');
+    const helpContentRef = React.useRef<HTMLDivElement | null>(null);
     const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
 
     const IS_GH_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
@@ -334,39 +336,86 @@ const App: FC = () => {
             {helpOpen && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHelpOpen(false)}>
                     <div style={{ background: 'white', borderRadius: 12, padding: 20, width: 'min(900px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-                        <h3 style={{ marginTop: 0 }}>Manual de uso</h3>
-                        <p>Bienvenido al manual de la aplicación. Aquí encontrarás los pasos para crear y gestionar tus cursos de bienestar emocional.</p>
-                        <h4>1. Lista de cursos</h4>
-                        <p>En la pantalla inicial verás “Mis Cursos”. Usa “Crear Nuevo Curso” para comenzar, o los botones “Acceder/Editar/Borrar” para gestionar cursos existentes.</p>
-                        <h4>2. Ficha del curso</h4>
-                        <ul>
-                            <li>Completa Título, Subtítulo y Descripción con el enfoque del curso.</li>
-                            <li>Selecciona la Categoría y agrega Etiquetas válidas (Enter para confirmar).</li>
-                            <li>Define Módulos y Objetivos: agrega hasta 6 módulos. Puedes escribir los objetivos o usar los botones de IA.</li>
-                            <li>Botón IA por objetivo: con título de módulo, genera un objetivo breve y motivador en segunda persona. Si falta el título, sugiere un nombre y objetivo.</li>
-                            <li>“Sugerir todos”: genera 4 módulos con objetivos desde el título y subtítulo del curso.</li>
-                            <li>Usa “Guardar” para crear/actualizar el curso y activar autoguardado (cada 5s).</li>
-                            <li>“Guardar y Continuar” avanza a la sección de contenidos.</li>
-                            <li>“Guardar y Salir” vuelve a la lista.</li>
-                        </ul>
-                        <h4>3. Contenidos del curso</h4>
-                        <ul>
-                            <li>Añade Partes y Recursos (texto, video, audio, imagen, quiz, iframe) por módulo.</li>
-                            <li>El editor de texto enriquecido permite estilos básicos (negrita, cursiva, subrayado, títulos).</li>
-                            <li>Reordena recursos y elimínalos cuando sea necesario.</li>
-                            <li>En la parte superior, usa “Guardar y volver a la lista” para guardar el estado actual y regresar. Usa “Atrás” para volver a la ficha y ajustar datos.</li>
-                        </ul>
-                        <h4>4. Generación y exportación</h4>
-                        <ul>
-                            <li>Al finalizar, la vista de “Curso Generado” muestra el código .ts y los assets requeridos. Puedes descargar el archivo.</li>
-                        </ul>
-                        <h4>5. Consejos para IA</h4>
-                        <ul>
-                            <li>En los prompts, describe claramente el objetivo, el tono y la audiencia.</li>
-                            <li>Para “Sugerir todos”, asegúrate de que el título y el subtítulo del curso reflejen el alcance completo.</li>
-                        </ul>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-                            <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={() => setHelpOpen(false)}>Cerrar</button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Manual de uso</h3>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <input
+                                    style={{ ...styles.input, width: 220, padding: '8px' }}
+                                    placeholder="Buscar en el manual..."
+                                    value={helpSearch}
+                                    onChange={e => setHelpSearch(e.target.value)}
+                                />
+                                <button
+                                    style={styles.buttonTiny}
+                                    onClick={() => {
+                                        const term = helpSearch.trim().toLowerCase();
+                                        if (!term) return;
+                                        const order = [
+                                            { id: 'help-lista', text: 'lista de cursos En la pantalla inicial verás “Mis Cursos”. Usa “Crear Nuevo Curso” para comenzar, o los botones “Acceder/Editar/Borrar” para gestionar cursos existentes.' },
+                                            { id: 'help-ficha', text: 'ficha del curso Completa Título, Subtítulo y Descripción Categoría Etiquetas Módulos Objetivos IA Sugerir todos Guardar Guardar y Continuar Guardar y Salir' },
+                                            { id: 'help-contenidos', text: 'contenidos del curso Partes Recursos editor texto reordenar guardar volver ficha' },
+                                            { id: 'help-export', text: 'generación exportación código ts assets descargar' },
+                                            { id: 'help-ia', text: 'consejos IA prompts segunda persona reflexivo emocional' }
+                                        ];
+                                        const found = order.find(s => s.text.toLowerCase().includes(term));
+                                        if (found) {
+                                            const el = document.getElementById(found.id);
+                                            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        } else {
+                                            alert('No se encontraron coincidencias.');
+                                        }
+                                    }}
+                                >Buscar</button>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 16 }}>
+                            <nav style={{ minWidth: 220, borderRight: '1px solid var(--border-color)', paddingRight: 12 }}>
+                                <p style={{ fontWeight: 600, marginTop: 0 }}>Índice</p>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
+                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-lista')?.scrollIntoView({ behavior: 'smooth' })}>1. Lista de cursos</button></li>
+                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-ficha')?.scrollIntoView({ behavior: 'smooth' })}>2. Ficha del curso</button></li>
+                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-contenidos')?.scrollIntoView({ behavior: 'smooth' })}>3. Contenidos del curso</button></li>
+                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-export')?.scrollIntoView({ behavior: 'smooth' })}>4. Generación y exportación</button></li>
+                                    <li><button style={{ ...styles.buttonTiny, display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: 'inherit' }} onClick={() => document.getElementById('help-ia')?.scrollIntoView({ behavior: 'smooth' })}>5. Consejos para IA</button></li>
+                                </ul>
+                            </nav>
+
+                            <div ref={helpContentRef} style={{ flex: 1, minWidth: 0 }}>
+                                <p>Bienvenido al manual de la aplicación. Aquí encontrarás los pasos para crear y gestionar tus cursos de bienestar emocional.</p>
+                                <h4 id="help-lista">1. Lista de cursos</h4>
+                                <p>En la pantalla inicial verás “Mis Cursos”. Usa “Crear Nuevo Curso” para comenzar, o los botones “Acceder/Editar/Borrar” para gestionar cursos existentes.</p>
+                                <h4 id="help-ficha">2. Ficha del curso</h4>
+                                <ul>
+                                <li>Completa Título, Subtítulo y Descripción con el enfoque del curso.</li>
+                                <li>Selecciona la Categoría y agrega Etiquetas válidas (Enter para confirmar).</li>
+                                <li>Define Módulos y Objetivos: agrega hasta 6 módulos. Puedes escribir los objetivos o usar los botones de IA.</li>
+                                <li>Botón IA por objetivo: con título de módulo, genera un objetivo breve y motivador en segunda persona. Si falta el título, sugiere un nombre y objetivo.</li>
+                                <li>“Sugerir todos”: genera 4 módulos con objetivos desde el título y subtítulo del curso.</li>
+                                <li>Usa “Guardar” para crear/actualizar el curso y activar autoguardado (cada 5s).</li>
+                                <li>“Guardar y Continuar” avanza a la sección de contenidos.</li>
+                                <li>“Guardar y Salir” vuelve a la lista.</li>
+                                </ul>
+                                <h4 id="help-contenidos">3. Contenidos del curso</h4>
+                                <ul>
+                                <li>Añade Partes y Recursos (texto, video, audio, imagen, quiz, iframe) por módulo.</li>
+                                <li>El editor de texto enriquecido permite estilos básicos (negrita, cursiva, subrayado, títulos).</li>
+                                <li>Reordena recursos y elimínalos cuando sea necesario.</li>
+                                <li>En la parte superior, usa “Guardar y volver a la lista” para guardar el estado actual y regresar. Usa “Atrás” para volver a la ficha y ajustar datos.</li>
+                                </ul>
+                                <h4 id="help-export">4. Generación y exportación</h4>
+                                <ul>
+                                <li>Al finalizar, la vista de “Curso Generado” muestra el código .ts y los assets requeridos. Puedes descargar el archivo.</li>
+                                </ul>
+                                <h4 id="help-ia">5. Consejos para IA</h4>
+                                <ul>
+                                <li>En los prompts, describe claramente el objetivo, el tono y la audiencia.</li>
+                                <li>Para “Sugerir todos”, asegúrate de que el título y el subtítulo del curso reflejen el alcance completo.</li>
+                                </ul>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                                    <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={() => setHelpOpen(false)}>Cerrar</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
