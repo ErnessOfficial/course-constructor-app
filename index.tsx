@@ -1770,6 +1770,7 @@ const QuizAIModal: FC<{
   const [error, setError] = useState('');
   const [jsonData, setJsonData] = useState<any[] | null>(null);
   const [htmlData, setHtmlData] = useState<string>('');
+  const [jsonSel, setJsonSel] = useState<Record<number, number>>({});
   const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
 
   const generate = async (refine: boolean = false) => {
@@ -1849,14 +1850,22 @@ Toma como base el siguiente HTML y mejóralo según lo indicado manteniendo la e
             {mode === 'json' && Array.isArray(jsonData) && (
               <div>
                 {jsonData.map((q: any, qi: number) => (
-                  <div key={qi} style={{ marginBottom: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{qi + 1}. {q.question}</div>
-                    <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
-                      {(q.options || []).map((op: any, oi: number) => (
-                        <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input type="radio" name={`q${qi}`} /> {op.text}
-                        </label>
-                      ))}
+                  <div key={qi} style={{ marginBottom: 14 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>{qi + 1}. {q.question}</div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {(q.options || []).map((op: any, oi: number) => {
+                        const selected = jsonSel[qi] === oi;
+                        return (
+                          <div key={oi} style={{ border: '1px solid var(--border-color)', borderRadius: 6, padding: '8px 10px', background: selected ? '#e9f5ff' : '#fff' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setJsonSel(prev => ({ ...prev, [qi]: oi }))}>
+                              <input type="radio" name={`q${qi}`} checked={selected} readOnly /> {op.text}
+                            </label>
+                            {selected && op.feedback && (
+                              <div style={{ color: '#555', marginTop: 4 }}>{op.feedback}</div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
