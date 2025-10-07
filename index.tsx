@@ -1012,6 +1012,16 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onSav
                             activity={act}
                             onChange={(updated) => updateResource(activeModuleIndex, activePartIndex, resIndex, updated)}
                             onGenerateWithAI={() => setGeminiTarget({ modIndex: activeModuleIndex, partIndex: activePartIndex, resIndex })}
+                            onAddIframe={(html) => {
+                                const newCourse = { ...currentCourse };
+                                const resources = newCourse.modules[activeModuleIndex].parts[activePartIndex].resources || [];
+                                const insertAt = resIndex + 1;
+                                const newRes: Activity = { id: `m${activeModuleIndex+1}p${activePartIndex+1}r${resources.length + 1}`, title: `Quiz HTML - ${act.title || ''}`.trim(), description: 'Versión HTML interactiva generada por IA', type: 'iframe', html } as any;
+                                resources.splice(insertAt, 0, newRes);
+                                // Reasignar IDs secuenciales
+                                newCourse.modules[activeModuleIndex].parts[activePartIndex].resources = resources.map((r, idx) => ({ ...r, id: `m${activeModuleIndex + 1}p${activePartIndex + 1}r${idx + 1}` }));
+                                setCurrentCourse(newCourse);
+                            }}
                         />
                     </div>
                 ))}
@@ -1034,12 +1044,13 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onSav
     );
 };
 
-const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => void, onGenerateWithAI: () => void }> = ({ activity, onChange, onGenerateWithAI }) => {
+const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => void, onGenerateWithAI: () => void, onAddIframe?: (html: string) => void }> = ({ activity, onChange, onGenerateWithAI, onAddIframe }) => {
     const handleChange = (field: string, value: any) => {
         onChange({ ...activity, [field]: value });
     };
     const [quizQCount, setQuizQCount] = useState<string>('');
     const [quizLoading, setQuizLoading] = useState(false);
+    const [quizHtmlLoading, setQuizHtmlLoading] = useState(false);
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
 
     const generateQuizNow = async () => {
@@ -1063,6 +1074,33 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
             alert(`Error generando el quiz: ${e?.message || e}`);
         } finally {
             setQuizLoading(false);
+        }
+    };
+
+    const generateQuizHtml = async () => {
+        try {
+            if (!onAddIframe) { alert('No se puede insertar HTML aquí.'); return; }
+            setQuizHtmlLoading(true);
+            const tema = (activity.title || '').trim();
+            const desc = (activity as any).description || '';
+            const n = Number(quizQCount) || 0;
+            const num = n > 0 ? n : (Array.isArray((activity as any).questions) ? (activity as any).questions.length || 5 : 5);
+            const prompt = `Actúa como diseñador instruccional y front-end. Genera un QUIZ interactivo completo en HTML, CSS y JavaScript (sin frameworks), en español, autocontenible en un solo bloque <html>…</html>, basado en:\n\n- Tema/Título: "${tema}"\n- Descripción / finalidad / tipo: "${desc}"\n- Número de preguntas: ${num}\n\nRequisitos:\n- Diseño visual limpio y responsive (usa fuentes del sistema).\n- Cada pregunta con 3-4 opciones; marca la opción correcta en el JS interno y ofrece feedback inmediato por opción.\n- Barra de progreso y puntaje al final, con mensaje según resultado.\n- No uses CDN; todo inline (estilos <style> y script <script>).\n- No incluyas backticks ni explicaciones fuera del HTML. Devuelve únicamente el HTML listo para <iframe>.`;
+            const res = await fetch(`${API_BASE}/api/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const j = await res.json();
+            let html = String(j?.text || '').trim();
+            html = html.replace(/^```(?:html)?/i, '').replace(/```$/,'').trim();
+            if (!html.toLowerCase().includes('<html')) {
+                // wrap if model returned partial markup
+                html = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>${html}</body></html>`;
+            }
+            onAddIframe(html);
+            alert('Quiz HTML insertado como recurso aparte.');
+        } catch (e: any) {
+            alert(`Error generando HTML del quiz: ${e?.message || e}`);
+        } finally {
+            setQuizHtmlLoading(false);
         }
     };
 
@@ -1107,9 +1145,14 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
                         <label style={{ marginLeft: 12 }}>N° objetivo:</label>
                         <input type="number" min={1} max={20} value={quizQCount} onChange={e => setQuizQCount(e.target.value)} style={{ width: 80, ...styles.input, padding: '6px 8px' }} />
                     </div>
-                    <button style={{...styles.button, ...styles.buttonAi}} onClick={generateQuizNow} disabled={quizLoading}>
-                        <i className="fas fa-magic"></i> {quizLoading ? 'Generando…' : 'Generar Quiz con IA'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button style={{...styles.button, ...styles.buttonAi}} onClick={generateQuizNow} disabled={quizLoading}>
+                            <i className="fas fa-magic"></i> {quizLoading ? 'Generando…' : 'Generar (JSON)'}
+                        </button>
+                        <button style={{...styles.button, ...styles.buttonSecondary}} onClick={generateQuizHtml} disabled={quizHtmlLoading} title="Inserta una versión HTML interactiva como recurso aparte (iframe)">
+                            <i className="fas fa-code"></i> {quizHtmlLoading ? 'Creando HTML…' : 'Generar HTML'}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
