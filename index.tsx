@@ -1065,10 +1065,13 @@ const toolbarButtonStyle: React.CSSProperties = { padding: '6px 10px', border: '
 
 const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => void }> = ({ valueHTML, onChangeHTML }) => {
     const editorRef = React.useRef<HTMLDivElement | null>(null);
-    const [html, setHtml] = useState<string>(valueHTML || '<p>Escribe aquí tu contenido.</p>');
 
     useEffect(() => {
-        setHtml(valueHTML || '<p>Escribe aquí tu contenido.</p>');
+        // Solo escribe el valor inicial o cuando cambia externamente
+        const node = editorRef.current;
+        if (!node) return;
+        const incoming = valueHTML || '<p>Escribe aquí tu contenido.</p>';
+        if (node.innerHTML !== incoming) node.innerHTML = incoming;
     }, [valueHTML]);
 
     const applyCmd = (cmd: string, val?: string) => {
@@ -1113,7 +1116,6 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
         const node = editorRef.current;
         if (!node) return;
         const newHtml = node.innerHTML;
-        setHtml(newHtml);
         onChangeHTML(newHtml);
     };
 
@@ -1158,8 +1160,21 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 onBlur={syncHtml}
                 onPaste={onPaste}
                 dir="ltr"
-                style={{ minHeight: 140, padding: 12, outline: 'none', whiteSpace: 'pre-wrap', wordBreak: 'break-word', direction: 'ltr' as any, unicodeBidi: 'plaintext' as any }}
-                dangerouslySetInnerHTML={{ __html: html }}
+                style={{
+                    minHeight: 160,
+                    padding: 12,
+                    outline: 'none',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                    direction: 'ltr' as any,
+                    unicodeBidi: 'isolate' as any,
+                    textAlign: 'left',
+                    boxSizing: 'border-box',
+                    width: '100%',
+                    maxWidth: '100%',
+                    overflowX: 'auto'
+                }}
             />
         </div>
     );
