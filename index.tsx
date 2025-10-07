@@ -1051,6 +1051,7 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
     const [quizQCount, setQuizQCount] = useState<string>('');
     const [quizLoading, setQuizLoading] = useState(false);
     const [quizHtmlLoading, setQuizHtmlLoading] = useState(false);
+    const [quizModalOpen, setQuizModalOpen] = useState(false);
     const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
 
     const generateQuizNow = async () => {
@@ -1141,18 +1142,25 @@ const ActivityEditor: FC<{ activity: Activity, onChange: (updated: Activity) => 
             {activity.type === 'quiz' && (
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                        <strong>Preguntas:</strong> <span>{Array.isArray(activity.questions) ? activity.questions.length : 0}</span>
-                        <label style={{ marginLeft: 12 }}>N° objetivo:</label>
+                        <strong>Preguntas actuales:</strong> <span>{Array.isArray(activity.questions) ? activity.questions.length : 0}</span>
+                        <label style={{ marginLeft: 12 }} title="Cantidad de preguntas a generar">N.º de preguntas:</label>
                         <input type="number" min={1} max={20} value={quizQCount} onChange={e => setQuizQCount(e.target.value)} style={{ width: 80, ...styles.input, padding: '6px 8px' }} />
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button style={{...styles.button, ...styles.buttonAi}} onClick={generateQuizNow} disabled={quizLoading}>
-                            <i className="fas fa-magic"></i> {quizLoading ? 'Generando…' : 'Generar (JSON)'}
-                        </button>
-                        <button style={{...styles.button, ...styles.buttonSecondary}} onClick={generateQuizHtml} disabled={quizHtmlLoading} title="Inserta una versión HTML interactiva como recurso aparte (iframe)">
-                            <i className="fas fa-code"></i> {quizHtmlLoading ? 'Creando HTML…' : 'Generar HTML'}
+                        <button style={{...styles.button, ...styles.buttonAi}} onClick={() => setQuizModalOpen(true)}>
+                            <i className="fas fa-magic"></i> Crear con IA
                         </button>
                     </div>
+                    {quizModalOpen && (
+                        <QuizAIModal
+                          initialTitle={activity.title}
+                          initialDesc={(activity as any).description || ''}
+                          initialCount={Number(quizQCount) || 5}
+                          onClose={() => setQuizModalOpen(false)}
+                          onApplyJSON={(questions) => { handleChange('questions', questions); setQuizModalOpen(false); }}
+                          onApplyHTML={(html) => { onAddIframe?.(html); setQuizModalOpen(false); }}
+                        />
+                    )}
                 </div>
             )}
         </div>
@@ -1523,6 +1531,48 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
         return `import type { Course } from '../../types';\n\n// TODO: Asegúrate de importar tu instructor si es necesario\n// import { mockInstructor } from './courseData';\n\nexport const course: Course = ${courseObjectString};\n\nexport default course;`;
     }, [course]);
 
+    const generatedHtml = useMemo(() => {
+        function esc(s: string) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+        const css = `body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;margin:0;color:#222;background:#fafafa}header{background:#fff;border-bottom:1px solid #ddd;padding:16px}main{display:flex;gap:16px;padding:16px}nav{width:260px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;max-height:80vh;overflow:auto}section.content{flex:1;background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;min-height:60vh}h1,h2,h3{margin:0 0 10px}a{color:#3367d6;text-decoration:none}a:hover{text-decoration:underline}.res{border-top:1px dashed #ddd;margin-top:12px;padding-top:12px}.quiz .opt{display:block;margin:6px 0;padding:8px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f8f8;cursor:pointer}.quiz .fb{color:#555;margin-top:4px;display:none}.quiz .opt.sel{background:#e9f5ff;border-color:#8ec5ff}`;
+        const js = `document.querySelectorAll('.quiz').forEach((qz)=>{qz.querySelectorAll('.opt').forEach((op)=>{op.addEventListener('click',()=>{qz.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));op.classList.add('sel');qz.querySelectorAll('.fb').forEach(f=>f.style.display='none');const fb=op.querySelector('.fb');if(fb)fb.style.display='block';});});});`;
+        function renderActivity(act:any, idx:number){
+            switch(act.type){
+                case 'text':{
+                    const html = Array.isArray(act.content)? act.content.join('\n') : esc(String(act.content||''));
+                    return `<div class="res"><h3>${esc(act.title)}</h3><div>${html}</div></div>`;
+                }
+                case 'image':{
+                    return `<div class="res"><h3>${esc(act.title)}</h3><img src="${esc(act.imageSrc)}" alt="${esc(act.title)}" style="max-width:100%;height:auto;border-radius:8px"/></div>`;
+                }
+                case 'video':{
+                    return `<div class="res"><h3>${esc(act.title)}</h3><video controls src="${esc(act.videoSrc)}" style="max-width:100%"></video></div>`;
+                }
+                case 'audio':{
+                    return `<div class="res"><h3>${esc(act.title)}</h3><audio controls src="${esc(act.audioSrc)}" style="width:100%"></audio></div>`;
+                }
+                case 'quiz':{
+                    const qs=(act.questions||[]).map((qq:any,i:number)=>`<div class="q"><div><strong>${i+1}.</strong> ${esc(qq.question)}</div>${(qq.options||[]).map((op:any)=>`<label class="opt">${esc(op.text)}<div class="fb">${esc(op.feedback)}</div></label>`).join('')}</div>`).join('');
+                    return `<div class="res quiz"><h3>${esc(act.title)}</h3>${qs}</div>`;
+                }
+                case 'iframe':{
+                    return `<div class="res"><h3>${esc(act.title)}</h3><div>${act.html||''}</div></div>`;
+                }
+                default:
+                    return `<div class="res"><h3>${esc(act.title||('Recurso '+(idx+1)))}</h3><em>Tipo no soportado en export HTML</em></div>`;
+            }
+        }
+        const navItems = course.modules.map((m,mi)=>`<li><a href="#m${mi+1}">${esc(m.title)}</a></li>`).join('');
+        const content = course.modules.map((m,mi)=>{
+            const parts = (m.parts||[]).map((p,pi)=>{
+                const res = (p.resources||[]).map((r,ri)=>renderActivity(r,ri)).join('');
+                return `<article id="m${mi+1}p${pi+1}"><h3>${esc(p.title)}</h3>${res}</article>`;
+            }).join('');
+            return `<section id="m${mi+1}"><h2>${esc(m.title)}</h2>${parts}</section>`;
+        }).join('');
+        const lo = (course.learningObjectives||[]).map((o:any,i:number)=>`<li>${esc(o)}</li>`).join('');
+        return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(course.title)}</title><style>${css}</style></head><body><header><h1>${esc(course.title)}</h1><div>${esc(course.subtitle||'')}</div><div style="margin-top:6px"><strong>Objetivos:</strong><ul>${lo}</ul></div></header><main><nav><strong>Módulos</strong><ul>${navItems}</ul></nav><section class="content">${content}</section></main><script>${js}</script></body></html>`;
+    }, [course]);
+
     const assets = useMemo(() => {
         const fileList = new Set<string>();
         fileList.add(`/images/${sanitizeForPath(course.coverImage)}`);
@@ -1558,6 +1608,14 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
             <h4>Código del Curso:</h4>
             <pre style={styles.generatedCode}><code>{generatedCode}</code></pre>
             <button style={styles.button} onClick={handleDownload}><i className="fas fa-download"></i> Descargar Archivo .ts</button>
+            <button style={{...styles.button, marginLeft: 8}} onClick={() => {
+                const blob = new Blob([generatedHtml], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${course.id}.html`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }}><i className="fas fa-file-code"></i> Descargar HTML</button>
             
             <h4 style={{marginTop: '2rem'}}>Lista de Archivos Requeridos:</h4>
             <p>Asegúrate de agregar los siguientes archivos en las carpetas `public/images`, `public/videos`, y `public/audios` de tu proyecto:</p>
@@ -1695,5 +1753,127 @@ const KindeWrappedApp: FC = () => {
   );
 };
 
+// --- QUIZ AI MODAL ---
+const QuizAIModal: FC<{
+  initialTitle: string;
+  initialDesc: string;
+  initialCount: number;
+  onApplyJSON: (questions: any[]) => void;
+  onApplyHTML: (html: string) => void;
+  onClose: () => void;
+}> = ({ initialTitle, initialDesc, initialCount, onApplyJSON, onApplyHTML, onClose }) => {
+  const [title, setTitle] = useState(initialTitle || '');
+  const [desc, setDesc] = useState(initialDesc || '');
+  const [count, setCount] = useState<number>(initialCount || 5);
+  const [mode, setMode] = useState<'json' | 'html'>('json');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [jsonData, setJsonData] = useState<any[] | null>(null);
+  const [htmlData, setHtmlData] = useState<string>('');
+  const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+
+  const generate = async (refine: boolean = false) => {
+    try {
+      setLoading(true); setError('');
+      let prompt = '';
+      if (mode === 'json') {
+        const base = `Actúa como un diseñador instruccional experto. Genera un quiz interactivo en español, con retroalimentación por opción, en formato JSON válido (arreglo) del tipo { question: string; options: { text: string; feedback: string; }[]; }[].
+Tema/Título: "${title}"
+Descripción / finalidad / tipo: "${desc}"
+Número de preguntas: ${count}
+Reglas: 3-4 opciones por pregunta, feedback específico, redacción clara en segunda persona, enfoque reflexivo-emocional. No incluyas texto fuera del JSON ni backticks.`;
+        prompt = refine && jsonData ? `${base}
+Toma como base el siguiente quiz y mejóralo según las indicaciones: ${JSON.stringify(jsonData).slice(0, 12000)}` : base;
+      } else {
+        const base = `Actúa como diseñador instruccional y front-end. Genera un QUIZ interactivo completo en HTML, CSS y JavaScript (sin frameworks), autocontenible en un solo bloque <html>…</html>, en español.
+Tema/Título: "${title}"
+Descripción / finalidad / tipo: "${desc}"
+Número de preguntas: ${count}
+Requisitos: diseño responsive, 3-4 opciones por pregunta, feedback inmediato por opción, barra de progreso y puntaje final con mensaje, sin CDN (usar <style> y <script> inline). Devuelve sólo el HTML, sin backticks ni explicaciones.`;
+        prompt = refine && htmlData ? `${base}
+Toma como base el siguiente HTML y mejóralo según lo indicado manteniendo la estructura: ${htmlData.slice(0, 12000)}` : base;
+      }
+      const res = await fetch(`${API_BASE}/api/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      let payload = String(j?.text || '').trim();
+      if (mode === 'json') {
+        payload = payload.replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+        const parsed = JSON.parse(payload);
+        if (!Array.isArray(parsed)) throw new Error('JSON inválido');
+        setJsonData(parsed);
+      } else {
+        payload = payload.replace(/^```(?:html)?/i, '').replace(/```$/,'').trim();
+        if (!payload.toLowerCase().includes('<html')) payload = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>${payload}</body></html>`;
+        setHtmlData(payload);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Error generando');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }} onClick={onClose}>
+      <div style={{ background: 'white', borderRadius: 12, padding: 16, width: 'min(960px, 96vw)', maxHeight: '92vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>Crear Quiz con IA</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={styles.label}>Tema/Título</label>
+            <input style={styles.input} value={title} onChange={e => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <label style={styles.label}>N.º de preguntas</label>
+            <input type="number" min={1} max={20} style={styles.input} value={count} onChange={e => setCount(Number(e.target.value) || 1)} />
+          </div>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <label style={styles.label}>Finalidad / tipo / descripción</label>
+          <textarea style={styles.textarea} value={desc} onChange={e => setDesc(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8 }}>
+          <span style={styles.label}>Salida:</span>
+          <label><input type="radio" name="mode" checked={mode==='json'} onChange={() => setMode('json')} /> JSON (integrado)</label>
+          <label><input type="radio" name="mode" checked={mode==='html'} onChange={() => setMode('html')} /> HTML (interactivo)</label>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <button style={{...styles.button, ...styles.buttonAi}} onClick={() => generate(false)} disabled={loading}><i className="fas fa-magic"></i> {loading ? 'Generando…' : 'Generar'}</button>
+          <button style={{...styles.button, ...styles.buttonSecondary}} onClick={() => generate(true)} disabled={loading || (!jsonData && !htmlData)} title="Solicita cambios manteniendo el contexto">Modificar</button>
+        </div>
+        {error && <p style={{ color: 'var(--danger-color)' }}>{error}</p>}
+        {/* Vista previa */}
+        {(jsonData || htmlData) && (
+          <div style={{ marginTop: 12, borderTop: '1px solid var(--border-color)', paddingTop: 12 }}>
+            <h4>Vista previa</h4>
+            {mode === 'json' && Array.isArray(jsonData) && (
+              <div>
+                {jsonData.map((q: any, qi: number) => (
+                  <div key={qi} style={{ marginBottom: 12 }}>
+                    <div style={{ fontWeight: 600 }}>{qi + 1}. {q.question}</div>
+                    <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+                      {(q.options || []).map((op: any, oi: number) => (
+                        <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input type="radio" name={`q${qi}`} /> {op.text}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {mode === 'html' && htmlData && (
+              <iframe style={{ width: '100%', height: 400, border: '1px solid var(--border-color)', borderRadius: 8 }} srcDoc={htmlData} />
+            )}
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+          <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={onClose}>Cancelar</button>
+          <button style={styles.button} onClick={() => { if (mode==='json' && jsonData) onApplyJSON(jsonData); if (mode==='html' && htmlData) onApplyHTML(htmlData); }} disabled={(mode==='json' && !jsonData) || (mode==='html' && !htmlData)}>Usar este quiz</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(<React.StrictMode><KindeWrappedApp /></React.StrictMode>);
