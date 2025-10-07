@@ -1077,13 +1077,22 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
         syncHtml();
     };
 
-    const wrapSelection = (tag: 'mark') => {
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        const range = sel.getRangeAt(0);
-        const el = document.createElement(tag);
-        el.setAttribute('style', 'background-color: #fff3a0;');
-        range.surroundContents(el);
+    const highlightColor = (color: string) => {
+        // Intenta usar el comando nativo de resaltado si está disponible
+        editorRef.current?.focus();
+        try {
+            // Algunos navegadores usan 'hiliteColor', otros 'backColor'
+            const ok = document.execCommand('hiliteColor', false, color);
+            if (!ok) document.execCommand('backColor', false, color);
+        } catch {
+            // Fallback: envolver selección
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            const range = sel.getRangeAt(0);
+            const span = document.createElement('span');
+            span.style.backgroundColor = color;
+            range.surroundContents(span);
+        }
         syncHtml();
     };
 
@@ -1108,18 +1117,38 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
         onChangeHTML(newHtml);
     };
 
+    const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+        // Intenta mantener el formato original lo más posible
+        const htmlData = e.clipboardData.getData('text/html');
+        const textData = e.clipboardData.getData('text/plain');
+        if (htmlData) {
+            e.preventDefault();
+            // Inserta HTML tal cual para preservar estilos básicos (negritas, colores, tamaños)
+            document.execCommand('insertHTML', false, htmlData);
+            syncHtml();
+        } else if (textData) {
+            e.preventDefault();
+            const safe = textData.replace(/\n/g, '<br>');
+            document.execCommand('insertHTML', false, safe);
+            syncHtml();
+        }
+    };
+
     return (
         <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)', marginBottom: '1rem' }}>
             <div style={{ display: 'flex', gap: 8, padding: 8, borderBottom: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
-                <button type="button" title="Negrita" style={toolbarButtonStyle} onClick={() => applyCmd('bold')}><i className="fas fa-bold"></i></button>
-                <button type="button" title="Cursiva" style={toolbarButtonStyle} onClick={() => applyCmd('italic')}><i className="fas fa-italic"></i></button>
-                <button type="button" title="Subrayado" style={toolbarButtonStyle} onClick={() => applyCmd('underline')}><i className="fas fa-underline"></i></button>
-                <button type="button" title="Resaltado" style={toolbarButtonStyle} onClick={() => wrapSelection('mark')}><i className="fas fa-highlighter"></i></button>
+                <button type="button" title="Negrita" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => applyCmd('bold')}><i className="fas fa-bold"></i></button>
+                <button type="button" title="Cursiva" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => applyCmd('italic')}><i className="fas fa-italic"></i></button>
+                <button type="button" title="Subrayado" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => applyCmd('underline')}><i className="fas fa-underline"></i></button>
+                <div style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                    <button type="button" title="Resaltar (amarillo)" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => highlightColor('#fff3a0')}><i className="fas fa-highlighter"></i> Amarillo</button>
+                    <button type="button" title="Resaltar (verde)" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => highlightColor('#b6f7b1')}><i className="fas fa-highlighter"></i> Verde</button>
+                </div>
                 <div style={{ width: 1, background: 'var(--border-color)' }} />
-                <button type="button" title="Nivel 1 - Título" style={toolbarButtonStyle} onClick={() => setBlock('H1')}>H1</button>
-                <button type="button" title="Nivel 2 - Subtítulo" style={toolbarButtonStyle} onClick={() => setBlock('H2')}>H2</button>
-                <button type="button" title="Nivel 3 - Encabezado" style={toolbarButtonStyle} onClick={() => setBlock('H3')}>H3</button>
-                <button type="button" title="Nivel 4 - Texto" style={toolbarButtonStyle} onClick={() => setBlock('P')}>P</button>
+                <button type="button" title="Nivel 1 - Título" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => setBlock('H1')}>H1</button>
+                <button type="button" title="Nivel 2 - Subtítulo" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => setBlock('H2')}>H2</button>
+                <button type="button" title="Nivel 3 - Encabezado" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => setBlock('H3')}>H3</button>
+                <button type="button" title="Nivel 4 - Texto" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => setBlock('P')}>P</button>
             </div>
             <div
                 ref={editorRef}
@@ -1127,7 +1156,9 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 suppressContentEditableWarning
                 onInput={syncHtml}
                 onBlur={syncHtml}
-                style={{ minHeight: 140, padding: 12, outline: 'none' }}
+                onPaste={onPaste}
+                dir="ltr"
+                style={{ minHeight: 140, padding: 12, outline: 'none', whiteSpace: 'pre-wrap', wordBreak: 'break-word', direction: 'ltr' as any, unicodeBidi: 'plaintext' as any }}
                 dangerouslySetInnerHTML={{ __html: html }}
             />
         </div>
