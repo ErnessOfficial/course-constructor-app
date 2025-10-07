@@ -1099,6 +1099,51 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
         syncHtml();
     };
 
+    const pastePlain = async () => {
+        try {
+            editorRef.current?.focus();
+            const text = await navigator.clipboard.readText();
+            if (text) {
+                document.execCommand('insertText', false, text);
+                syncHtml();
+            }
+        } catch {
+            // Fallback: prompt si el navegador no permite leer del portapapeles
+            const txt = window.prompt('Pegar como texto sin formato (Ctrl/Cmd+V aquí):', '');
+            if (txt != null) {
+                document.execCommand('insertText', false, txt);
+                syncHtml();
+            }
+        }
+    };
+
+    const alignText = (dir: 'left' | 'center' | 'right' | 'justify') => {
+        editorRef.current?.focus();
+        const map: Record<string, string> = {
+            left: 'justifyLeft',
+            center: 'justifyCenter',
+            right: 'justifyRight',
+            justify: 'justifyFull'
+        };
+        document.execCommand(map[dir], false);
+        syncHtml();
+    };
+
+    const toggleList = (type: 'ul' | 'ol') => {
+        editorRef.current?.focus();
+        document.execCommand(type === 'ul' ? 'insertUnorderedList' : 'insertOrderedList', false);
+        syncHtml();
+    };
+
+    const removeFormatting = () => {
+        editorRef.current?.focus();
+        document.execCommand('removeFormat', false);
+        // También intenta limpiar colores de fondo aplicados
+        try { document.execCommand('hiliteColor', false, 'transparent'); } catch {}
+        try { document.execCommand('backColor', false, 'transparent'); } catch {}
+        syncHtml();
+    };
+
     const setBlock = (block: 'H1' | 'H2' | 'H3' | 'P') => {
         document.execCommand('formatBlock', false, block);
         // Ajustes de estilo mínimos acorde a la app
@@ -1151,6 +1196,17 @@ const RichTextEditor: FC<{ valueHTML: string; onChangeHTML: (html: string) => vo
                 <button type="button" title="Nivel 2 - Subtítulo" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => setBlock('H2')}>H2</button>
                 <button type="button" title="Nivel 3 - Encabezado" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => setBlock('H3')}>H3</button>
                 <button type="button" title="Nivel 4 - Texto" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => setBlock('P')}>P</button>
+                <div style={{ width: 1, background: 'var(--border-color)' }} />
+                <button type="button" title="Alinear a la izquierda" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => alignText('left')}><i className="fas fa-align-left"></i></button>
+                <button type="button" title="Centrar" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => alignText('center')}><i className="fas fa-align-center"></i></button>
+                <button type="button" title="Alinear a la derecha" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => alignText('right')}><i className="fas fa-align-right"></i></button>
+                <button type="button" title="Justificar" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => alignText('justify')}><i className="fas fa-align-justify"></i></button>
+                <div style={{ width: 1, background: 'var(--border-color)' }} />
+                <button type="button" title="Lista con viñetas" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => toggleList('ul')}><i className="fas fa-list-ul"></i></button>
+                <button type="button" title="Lista numerada" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={() => toggleList('ol')}><i className="fas fa-list-ol"></i></button>
+                <div style={{ width: 1, background: 'var(--border-color)' }} />
+                <button type="button" title="Pegar sin formato" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={pastePlain}><i className="fas fa-clipboard"></i> Pegado plano</button>
+                <button type="button" title="Borrar formato" style={toolbarButtonStyle} onMouseDown={e => e.preventDefault()} onClick={removeFormatting}><i className="fas fa-eraser"></i></button>
             </div>
             <div
                 ref={editorRef}
