@@ -80,6 +80,7 @@ const App: FC = () => {
     const profileKey = `profile:${uid}`;
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [profileModalOpen, setProfileModalOpen] = useState(false);
+    const [helpOpen, setHelpOpen] = useState(false);
     const [profile, setProfile] = useState<ProfileData>({ firstName: '', lastName: '', company: '', email: '', username: '' });
 
     const IS_GH_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
@@ -266,7 +267,117 @@ const App: FC = () => {
                     </p>
                 )}
             </header>
-            
+
+            {/* Modal de perfil */}
+            {profileModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setProfileModalOpen(false)}>
+                    <div style={{ background: 'white', borderRadius: 12, padding: 20, width: 'min(680px, 95vw)' }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ marginTop: 0 }}>Editar perfil</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 16, alignItems: 'center' }}>
+                            <div>
+                                <img src={avatarUrl} alt="avatar" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }} />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Cambiar foto</label>
+                                <input type="file" accept="image/*" onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (!f) return;
+                                    const r = new FileReader();
+                                    r.onload = () => setProfile(prev => ({ ...prev, avatarDataUrl: String(r.result) }));
+                                    r.readAsDataURL(f);
+                                }} />
+                            </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                            <div>
+                                <label style={styles.label}>Nombre</label>
+                                <input style={styles.input} value={profile.firstName || ''} onChange={e => setProfile(p => ({ ...p, firstName: e.target.value }))} />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Apellido</label>
+                                <input style={styles.input} value={profile.lastName || ''} onChange={e => setProfile(p => ({ ...p, lastName: e.target.value }))} />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Usuario</label>
+                                <input style={styles.input} value={profile.username || ''} onChange={e => setProfile(p => ({ ...p, username: e.target.value }))} />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Correo (solo lectura)</label>
+                                <input style={styles.input} value={profile.email || user?.email || ''} readOnly />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Empresa (opcional)</label>
+                                <input style={styles.input} value={profile.company || ''} onChange={e => setProfile(p => ({ ...p, company: e.target.value }))} />
+                            </div>
+                            <div>
+                                <label style={styles.label}>País</label>
+                                <input style={styles.input} value={profile.country || ''} onChange={e => setProfile(p => ({ ...p, country: e.target.value }))} />
+                            </div>
+                            <div>
+                                <label style={styles.label}>Ciudad / Localidad</label>
+                                <input style={styles.input} value={profile.location || ''} onChange={e => setProfile(p => ({ ...p, location: e.target.value }))} />
+                            </div>
+                            <div style={{ gridColumn: '1 / span 2' }}>
+                                <label style={styles.label}>Bio</label>
+                                <textarea style={styles.textarea} value={profile.bio || ''} onChange={e => setProfile(p => ({ ...p, bio: e.target.value }))} />
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                            <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={() => setProfileModalOpen(false)}>Cancelar</button>
+                            <button style={styles.button} onClick={() => { try { localStorage.setItem(profileKey, JSON.stringify(profile)); } catch {}; setProfileModalOpen(false); showToast('Perfil actualizado'); }}>Guardar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de ayuda */}
+            {helpOpen && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setHelpOpen(false)}>
+                    <div style={{ background: 'white', borderRadius: 12, padding: 20, width: 'min(900px, 96vw)', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ marginTop: 0 }}>Manual de uso</h3>
+                        <p>Bienvenido al manual de la aplicación. Aquí encontrarás los pasos para crear y gestionar tus cursos de bienestar emocional.</p>
+                        <h4>1. Lista de cursos</h4>
+                        <p>En la pantalla inicial verás “Mis Cursos”. Usa “Crear Nuevo Curso” para comenzar, o los botones “Acceder/Editar/Borrar” para gestionar cursos existentes.</p>
+                        <h4>2. Ficha del curso</h4>
+                        <ul>
+                            <li>Completa Título, Subtítulo y Descripción con el enfoque del curso.</li>
+                            <li>Selecciona la Categoría y agrega Etiquetas válidas (Enter para confirmar).</li>
+                            <li>Define Módulos y Objetivos: agrega hasta 6 módulos. Puedes escribir los objetivos o usar los botones de IA.</li>
+                            <li>Botón IA por objetivo: con título de módulo, genera un objetivo breve y motivador en segunda persona. Si falta el título, sugiere un nombre y objetivo.</li>
+                            <li>“Sugerir todos”: genera 4 módulos con objetivos desde el título y subtítulo del curso.</li>
+                            <li>Usa “Guardar” para crear/actualizar el curso y activar autoguardado (cada 5s).</li>
+                            <li>“Guardar y Continuar” avanza a la sección de contenidos.</li>
+                            <li>“Guardar y Salir” vuelve a la lista.</li>
+                        </ul>
+                        <h4>3. Contenidos del curso</h4>
+                        <ul>
+                            <li>Añade Partes y Recursos (texto, video, audio, imagen, quiz, iframe) por módulo.</li>
+                            <li>El editor de texto enriquecido permite estilos básicos (negrita, cursiva, subrayado, títulos).</li>
+                            <li>Reordena recursos y elimínalos cuando sea necesario.</li>
+                            <li>En la parte superior, usa “Guardar y volver a la lista” para guardar el estado actual y regresar. Usa “Atrás” para volver a la ficha y ajustar datos.</li>
+                        </ul>
+                        <h4>4. Generación y exportación</h4>
+                        <ul>
+                            <li>Al finalizar, la vista de “Curso Generado” muestra el código .ts y los assets requeridos. Puedes descargar el archivo.</li>
+                        </ul>
+                        <h4>5. Consejos para IA</h4>
+                        <ul>
+                            <li>En los prompts, describe claramente el objetivo, el tono y la audiencia.</li>
+                            <li>Para “Sugerir todos”, asegúrate de que el título y el subtítulo del curso reflejen el alcance completo.</li>
+                        </ul>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                            <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={() => setHelpOpen(false)}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Botón de Ayuda global */}
+            <button type="button" onClick={() => setHelpOpen(true)}
+                style={{ position: 'fixed', left: 16, bottom: 16, background: 'var(--primary-color)', color: 'white', border: 'none', borderRadius: 20, padding: '10px 14px', cursor: 'pointer', zIndex: 999 }}
+                title="Abrir ayuda">
+                <i className="fas fa-circle-question" /> Ayuda
+            </button>
+
             {view === 'list' && (
                 <CourseList
                     courses={courses}
@@ -280,7 +391,15 @@ const App: FC = () => {
             {view === 'create' && currentCourse && (
                 <>
                     {step === 1 && <CourseForm course={currentCourse} onSubmit={handleFormSubmit} onCancel={handleBackToList} onSaveAndExit={handleSaveAndExit} onSaveDraft={handleSaveDraft} onAutoSave={handleAutoSave} onToast={showToast} />}
-                    {step === 2 && <ModuleEditor course={currentCourse} onFinish={handleFinishEditing} />}
+                    {step === 2 && (
+                        <ModuleEditor
+                            course={currentCourse}
+                            onFinish={handleFinishEditing}
+                            onSaveAndExitToList={(c) => { const saved = upsertCourse(c); setCurrentCourse(null); setView('list'); showToast('Guardado'); }}
+                            onBackToForm={(c) => { const saved = upsertCourse(c); setCurrentCourse(saved); setStep(1); showToast('Guardado'); }}
+                            onToast={showToast}
+                        />
+                    )}
                     {step === 3 && <GeneratedCourseView course={currentCourse} onRestart={handleCreateNew} />}
                 </>
             )}
@@ -649,7 +768,7 @@ const CourseForm: FC<{ course: Course, onSubmit: (data: Course) => void, onCance
     );
 };
 
-const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = ({ course, onFinish }) => {
+const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void, onSaveAndExitToList?: (data: Course) => void, onBackToForm?: (data: Course) => void, onToast?: (text: string) => void }> = ({ course, onFinish, onSaveAndExitToList, onBackToForm, onToast }) => {
     const [currentCourse, setCurrentCourse] = useState(course);
     const [activeModuleIndex, setActiveModuleIndex] = useState(0);
     const [activePartIndex, setActivePartIndex] = useState(0);
@@ -756,6 +875,20 @@ const ModuleEditor: FC<{ course: Course, onFinish: (data: Course) => void }> = (
 
     return (
         <div style={styles.card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }}
+                        title="Guardar y volver a la lista"
+                        onClick={() => { onSaveAndExitToList?.(currentCourse); onToast?.('Guardado'); }}>
+                        Guardar y volver a la lista
+                    </button>
+                    <button type="button" style={{ ...styles.button, ...styles.buttonSecondary, padding: '8px 14px' }}
+                        title="Volver a la ficha"
+                        onClick={() => { onBackToForm?.(currentCourse); }}>
+                        Atrás
+                    </button>
+                </div>
+            </div>
             <h2 style={styles.h2}>{course.title} - Editor de Contenido</h2>
             <div style={styles.tabs}>
                 {currentCourse.modules.map((mod, index) => (
@@ -1139,7 +1272,7 @@ const GeneratedCourseView: FC<{ course: Course, onRestart: () => void }> = ({ co
 };
 
 // --- AUTH GATE & SETUP ---
-interface ProfileData { firstName: string; lastName: string; company?: string; email: string; username: string; avatarDataUrl?: string; }
+interface ProfileData { firstName: string; lastName: string; company?: string; email: string; username: string; avatarDataUrl?: string; country?: string; location?: string; bio?: string; }
 
 const AuthGate: FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading, user, login, register } = useKindeAuth() as any;
